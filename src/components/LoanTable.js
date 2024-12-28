@@ -21,7 +21,7 @@ function LoanTable() {
    */
   const fetchClients = useCallback(async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/clients");
+      const response = await fetch("http://13.246.7.5:5000/api/clients");
       if (!response.ok) {
         throw new Error(`Error fetching clients: ${response.status}`);
       }
@@ -39,7 +39,7 @@ function LoanTable() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("http://localhost:5000/api/loans");
+      const response = await fetch("http://13.246.7.5:5000/api/loans");
       if (!response.ok) {
         throw new Error(`Error fetching loans: ${response.status}`);
       }
@@ -87,11 +87,11 @@ function LoanTable() {
   };
 
   const handleSubmitLoan = async (loanData) => {
-    let url = "http://localhost:5000/api/loans";
+    let url = "http://13.246.7.5:5000/api/loans";
     let method = "POST";
 
     if (selectedLoan && selectedLoan._id) {
-      url = `http://localhost:5000/api/loans/${selectedLoan._id}`;
+      url = `http://13.246.7.5:5000/api/loans/${selectedLoan._id}`;
       method = "PUT";
     }
 

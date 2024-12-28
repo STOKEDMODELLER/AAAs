@@ -30,7 +30,7 @@ function LoanList({ loans, fetchLoans }) {
    */
   const fetchClients = useCallback(async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/clients");
+      const response = await fetch("http://13.246.7.5:5000/api/clients");
       if (!response.ok) {
         throw new Error(`Error fetching clients: ${response.status}`);
       }
@@ -68,11 +68,11 @@ function LoanList({ loans, fetchLoans }) {
   const handleSubmitLoan = async (loanData) => {
     try {
       const isEdit = !!(selectedLoan && selectedLoan._id);
-      let url = "http://localhost:5000/api/loans";
+      let url = "http://13.246.7.5:5000/api/loans";
       let method = "POST";
 
       if (isEdit) {
-        url = `http://localhost:5000/api/loans/${selectedLoan._id}`;
+        url = `http://13.246.7.5:5000/api/loans/${selectedLoan._id}`;
         method = "PUT";
       }
 

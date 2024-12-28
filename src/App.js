@@ -32,7 +32,7 @@ const App = () => {
   // Fetch Payments
   const fetchPayments = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/payments");
+      const response = await fetch("http://13.246.7.5:5000/api/payments");
       if (!response.ok) {
         throw new Error("Failed to fetch payments.");
       }
@@ -47,9 +47,9 @@ const App = () => {
     setLoading(true);
 
     Promise.all([
-      fetchData("http://localhost:5000/api/clients", setClients, "clients"),
-      fetchData("http://localhost:5000/api/loans", setLoans, "loans"),
-      fetchData("http://localhost:5000/api/payments", setPayments, "payments"),
+      fetchData("http://13.246.7.5:5000/api/clients", setClients, "clients"),
+      fetchData("http://13.246.7.5:5000/api/loans", setLoans, "loans"),
+      fetchData("http://13.246.7.5:5000/api/payments", setPayments, "payments"),
     ]).finally(() => setLoading(false));
   }, []);
 

@@ -41,8 +41,8 @@ const PaymentList = ({ payments, refreshPayments, clients = [] }) => {
   const handleAddOrEditPaymentSubmit = async (paymentData) => {
     try {
       const url = isEditMode
-        ? `http://localhost:5000/api/payments/${selectedPayment._id}`
-        : "http://localhost:5000/api/payments";
+        ? `http://13.246.7.5:5000/api/payments/${selectedPayment._id}`
+        : "http://13.246.7.5:5000/api/payments";
       const method = isEditMode ? "PUT" : "POST";
 
       const response = await fetch(url, {
@@ -77,7 +77,7 @@ const PaymentList = ({ payments, refreshPayments, clients = [] }) => {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/api/payments/${paymentID}`, {
+      const response = await fetch(`http://13.246.7.5:5000/api/payments/${paymentID}`, {
         method: "DELETE",
       });
 

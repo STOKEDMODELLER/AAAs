@@ -31,7 +31,7 @@ function ClientTable() {
     setError(null);
 
     try {
-      const response = await fetch("http://localhost:5000/api/clients");
+      const response = await fetch("http://13.246.7.5:5000/api/clients");
       if (!response.ok) {
         throw new Error(`Error fetching clients: ${response.status}`);
       }
@@ -73,12 +73,12 @@ function ClientTable() {
    * @param {object} clientData - new or updated client object
    */
   const handleSubmitClient = async (clientData) => {
-    let url = "http://localhost:5000/api/clients";
+    let url = "http://13.246.7.5:5000/api/clients";
     let method = "POST";
 
     // If editing
     if (selectedClient && selectedClient._id) {
-      url = `http://localhost:5000/api/clients/${selectedClient._id}`;
+      url = `http://13.246.7.5:5000/api/clients/${selectedClient._id}`;
       method = "PUT";
     }
 

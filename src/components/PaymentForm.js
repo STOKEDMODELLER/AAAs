@@ -40,7 +40,7 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
     const fetchClients = async () => {
       console.log("Fetching clients...");
       try {
-        const response = await fetch(`http://localhost:5000/api/clients`);
+        const response = await fetch(`http://13.246.7.5:5000/api/clients`);
         if (!response.ok) throw new Error("Failed to fetch clients.");
         const { data } = await response.json();
         setClients(data);
@@ -82,7 +82,7 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
 
       console.log(`Fetching loans for Client ID: ${formData.clientID}...`);
       try {
-        const response = await fetch(`http://localhost:5000/api/loans`);
+        const response = await fetch(`http://13.246.7.5:5000/api/loans`);
         if (!response.ok) throw new Error("Failed to fetch loans.");
         const { data } = await response.json();
         const filteredLoans = data.filter((loan) => loan.clientID === formData.clientID);
@@ -119,8 +119,8 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
       console.log(`Fetching details and payments for Loan ID: ${formData.loanID}...`);
       try {
         const [loanResponse, paymentsResponse] = await Promise.all([
-          fetch(`http://localhost:5000/api/loans/loans_by_LID/${formData.loanID}`),
-          fetch(`http://localhost:5000/api/payments?loanID=${formData.loanID}`),
+          fetch(`http://13.246.7.5:5000/api/loans/loans_by_LID/${formData.loanID}`),
+          fetch(`http://13.246.7.5:5000/api/payments?loanID=${formData.loanID}`),
         ]);
 
         if (!loanResponse.ok) throw new Error("Failed to fetch loan details.");

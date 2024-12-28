@@ -19,7 +19,7 @@ function ClientCard({ client, refreshClients }) {
   };
 
   const handleEditSubmit = async (updatedClient) => {
-    const url = `http://localhost:5000/api/clients/${client._id}`;
+    const url = `http://13.246.7.5:5000/api/clients/${client._id}`;
     const response = await fetch(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },

@@ -24,7 +24,7 @@ const ClientList = ({ clients, refreshClients }) => {
   };
 
   const handleAddClientSubmit = async (newClient) => {
-    const response = await fetch("http://localhost:5000/api/clients", {
+    const response = await fetch("http://13.246.7.5:5000/api/clients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newClient),

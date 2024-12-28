@@ -34,7 +34,7 @@ app.use("/api/payments", paymentRoutes);
 
 // Serve React Frontend in Production
 if (process.env.NODE_ENV === "production") {
-  const buildPath = path.join(__dirname, "../frontend/build");
+  const buildPath = path.join(__dirname, "../build");
   app.use(express.static(buildPath));
 
   app.get("*", (req, res) => {
