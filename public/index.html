@@ -4,6 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>React App</title>
+    <style>
+      /* Apply a scale transformation to the entire page */
+      body {
+        transform: scale(0.75); /* Scale down to 75% */
+        transform-origin: top left; /* Keep scaling aligned to the top-left corner */
+        width: 133.33%; /* Compensate for the scaling */
+        height: 133.33%; /* Compensate for the scaling */
+        overflow-x: hidden; /* Prevent horizontal scroll caused by scaling */
+      }
+    </style>
   </head>
   <body>
     <!-- This is the container React needs -->
