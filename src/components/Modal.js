@@ -16,11 +16,11 @@ function Modal({ isOpen, onClose, title, description, notification, children }) 
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
+      <div className="bg-white rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-hidden">
         <header className="px-4 py-2 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-800">{title}</h2>
         </header>
-        <main className="p-4">
+        <main className="p-4 overflow-y-auto" style={{ maxHeight: "calc(90vh - 96px)" }}>
           {description && (
             <p className="mb-3 text-sm text-gray-600">{description}</p>
           )}
