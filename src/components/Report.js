@@ -14,17 +14,19 @@ const Report = ({
 
   const calculateProjectedPayments = () => {
     if (!selectedLoan) return [];
-    const { interestRate, loanAmount, termMonths = 12 } = selectedLoan;
+    const { interestRate, loanAmount, termMonths = 12, adminFee = 0 } = selectedLoan;
 
     const monthlyPrincipal = loanAmount / termMonths; // Fixed monthly principal
     const monthlyInterestRate = interestRate / 12; // Convert annual interest rate to monthly
+    const totalAdminFee = loanAmount * adminFee; // Calculate total admin fee
+    const adminFeePerTerm = totalAdminFee / termMonths; // Distribute admin fee across terms
 
     let balance = loanAmount;
     const projectedPayments = [];
 
     for (let term = 1; term <= termMonths; term++) {
       const interest = parseFloat((balance * monthlyInterestRate).toFixed(2)); // Monthly interest
-      const totalPayment = parseFloat((monthlyPrincipal + interest).toFixed(2)); // Total payment
+      const totalPayment = parseFloat((monthlyPrincipal + interest + adminFeePerTerm).toFixed(2)); // Total payment including admin fee
       balance = Math.max(parseFloat((balance - monthlyPrincipal).toFixed(2)), 0); // Update balance
 
       projectedPayments.push({
@@ -32,6 +34,7 @@ const Report = ({
         date: new Date(new Date().setMonth(new Date().getMonth() + term)), // Future date
         principal: parseFloat(monthlyPrincipal.toFixed(2)),
         interest,
+        adminFee: parseFloat(adminFeePerTerm.toFixed(2)), // Admin fee per term
         totalPayment,
         remainingBalance: balance,
       });
@@ -142,7 +145,7 @@ const Report = ({
             {/* Payments Made Section */}
             <div className="overflow-x-auto">
               <h3 className="text-xl font-semibold text-gray-800 mb-4">Payments Made</h3>
-              {payments.length > 0 ? (
+              {sortedPayments.length > 0 ? (
                 <table className="min-w-full bg-white border border-gray-300 rounded-lg">
                   <thead className="bg-gray-100">
                     <tr>
@@ -169,7 +172,7 @@ const Report = ({
             </div>
 
             {/* Projected Payments Section */}
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto mt-6">
               <h3 className="text-xl font-semibold text-gray-800 mb-4">Projected Payment Schedule</h3>
               {projectedPayments.length > 0 ? (
                 <table className="min-w-full bg-white border border-gray-300 rounded-lg">
@@ -179,6 +182,7 @@ const Report = ({
                       <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Payment Date</th>
                       <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Principal</th>
                       <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Interest</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Admin Fee</th>
                       <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Total Payment</th>
                       <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Remaining Balance</th>
                     </tr>
@@ -190,6 +194,7 @@ const Report = ({
                         <td className="py-4 px-6 text-sm text-gray-700">{payment.date.toLocaleDateString()}</td>
                         <td className="py-4 px-6 text-sm text-gray-700">{payment.principal.toFixed(2)}</td>
                         <td className="py-4 px-6 text-sm text-gray-700">{payment.interest.toFixed(2)}</td>
+                        <td className="py-4 px-6 text-sm text-gray-700">{payment.adminFee.toFixed(2)}</td>
                         <td className="py-4 px-6 text-sm text-gray-700">{payment.totalPayment.toFixed(2)}</td>
                         <td className="py-4 px-6 text-sm text-gray-700">{payment.remainingBalance.toFixed(2)}</td>
                       </tr>

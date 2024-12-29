@@ -110,27 +110,46 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
   }, [formData.loanID, setNotification]);
 
   const calculateAllTermDetails = (loan) => {
+    if (!loan) {
+      console.error("Loan object is undefined");
+      return [];
+    }
+  
     const terms = [];
-    const principalPerTerm = parseFloat(loan.loanAmount) / parseInt(loan.termMonths, 10);
-    const monthlyInterestRate = parseFloat(loan.interestRate) / 12;
-    let balance = parseFloat(loan.loanAmount);
-
-    for (let term = 1; term <= loan.termMonths; term++) {
-      const interest = parseFloat((balance * monthlyInterestRate).toFixed(2));
-      const total = parseFloat((principalPerTerm + interest).toFixed(2));
+    const loanAmount = parseFloat(loan.loanAmount || 0); // Default to 0 if undefined
+    const termMonths = parseInt(loan.termMonths || 12, 10); // Default to 12 months if undefined
+    const interestRate = parseFloat(loan.interestRate || 0); // Default to 0 if undefined
+    const adminFeeRate = parseFloat(loan.adminFee || 0); // Default to 0 if undefined
+    const monthlyInterestRate = interestRate / 12;
+  
+    const totalAdminFee = loanAmount * adminFeeRate; // Calculate total admin fee
+    const adminFeePerTerm = totalAdminFee / termMonths; // Distribute admin fee evenly
+    const principalPerTerm = loanAmount / termMonths; // Principal for each term
+  
+    let balance = loanAmount;
+  
+    for (let term = 1; term <= termMonths; term++) {
+      const interest = parseFloat((balance * monthlyInterestRate).toFixed(2)); // Calculate monthly interest
+      const total = parseFloat((principalPerTerm + interest + adminFeePerTerm).toFixed(2)); // Total includes admin fee
+      const scheduledDate = new Date(new Date(loan.startDate).setMonth(new Date(loan.startDate).getMonth() + term - 1));
+  
       terms.push({
         term,
-        scheduledDate: new Date(new Date(loan.startDate).setMonth(new Date(loan.startDate).getMonth() + term - 1)),
-        principal: principalPerTerm,
+        scheduledDate,
+        principal: parseFloat(principalPerTerm.toFixed(2)),
         interest,
+        adminFee: parseFloat(adminFeePerTerm.toFixed(2)),
         total,
       });
-      balance -= principalPerTerm;
+  
+      balance -= principalPerTerm; // Reduce balance by the principal amount
     }
-
-    setAllTermDetails(terms);
+  
+    setAllTermDetails(terms); // Update state with calculated terms
   };
-
+  
+  
+  
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -304,9 +323,14 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
           <strong>Interest for Term:</strong> {interestForTerm.toFixed(2)}
         </p>
         <p className="text-gray-600 mt-2">
+          <strong>Admin Fee for Term:</strong> {allTermDetails.find(t => t.term === parseInt(formData.paymentTerm))?.adminFee.toFixed(2) || "0.00"}
+        </p>
+
+        <p className="text-gray-600 mt-2">
           <strong>Total Expected for Term:</strong> {totalExpectedForTerm.toFixed(2)}
         </p>
       </div>
+
 
       <div>
         <label htmlFor="amount" className="block text-gray-700 font-medium mb-1">
