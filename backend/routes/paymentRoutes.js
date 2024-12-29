@@ -3,15 +3,17 @@ const PaymentTracking = require("../models/PaymentTracking");
 const Loan = require("../models/Loan");
 const router = express.Router();
 
-// Get all payments
 router.get("/", async (req, res, next) => {
   try {
-    const payments = await PaymentTracking.find();
+    const { loanID } = req.query;
+    const filter = loanID ? { loanID } : {};
+    const payments = await PaymentTracking.find(filter);
     return res.status(200).json({ success: true, data: payments });
   } catch (error) {
     next(error);
   }
 });
+
 
 // Get payment by ID
 router.get("/:id", async (req, res, next) => {
@@ -92,25 +94,35 @@ router.put("/:id", async (req, res, next) => {
   }
 });
 
-// Delete a payment
 router.delete("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const deletedPayment = await PaymentTracking.findByIdAndDelete(id);
-    if (!deletedPayment) {
-      return res.status(404).json({ success: false, message: "Payment not found." });
+    const loan = await Loan.findById(id);
+    if (!loan) {
+      return res.status(404).json({ success: false, message: "Loan not found." });
     }
 
-    const loan = await Loan.findOne({ loanID: deletedPayment.loanID });
-    if (loan) {
-      loan.outstandingBalance += deletedPayment.amount;
-      await loan.save();
-    }
+    await PaymentTracking.deleteMany({ loanID: loan.loanID });
+    await loan.deleteOne();
 
-    return res.status(200).json({ success: true, message: "Payment deleted successfully.", data: deletedPayment });
+    return res.status(200).json({ success: true, message: "Loan and associated payments deleted successfully." });
   } catch (error) {
     next(error);
   }
 });
+// Get payment by paymentID
+router.get("/by-payment-id/:paymentID", async (req, res, next) => {
+  try {
+    const { paymentID } = req.params;
+    const payment = await PaymentTracking.findOne({ paymentID });
+    if (!payment) {
+      return res.status(404).json({ success: false, message: "Payment not found." });
+    }
+    return res.status(200).json({ success: true, data: payment });
+  } catch (error) {
+    next(error);
+  }
+});
+
 
 module.exports = router;

@@ -1,4 +1,5 @@
 const express = require("express");
+const PaymentTracking = require("../models/PaymentTracking");
 const Loan = require("../models/Loan");
 const router = express.Router();
 
@@ -55,15 +56,26 @@ router.put("/:id", async (req, res, next) => {
   }
 });
 
-// Delete a loan
 router.delete("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const deletedLoan = await Loan.findByIdAndDelete(id);
-    if (!deletedLoan) {
+
+    // Find the loan by ID
+    const loan = await Loan.findById(id);
+    if (!loan) {
       return res.status(404).json({ success: false, message: "Loan not found." });
     }
-    return res.status(200).json({ success: true, message: "Loan deleted successfully.", data: deletedLoan });
+
+    // Delete all payments associated with the loan
+    await PaymentTracking.deleteMany({ loanID: loan.loanID });
+
+    // Delete the loan
+    await loan.deleteOne();
+
+    return res.status(200).json({
+      success: true,
+      message: "Loan and all associated payments deleted successfully.",
+    });
   } catch (error) {
     next(error);
   }

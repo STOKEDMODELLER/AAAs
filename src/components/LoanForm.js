@@ -1,5 +1,15 @@
+// ./components/LoanForm.js
 import React, { useState, useEffect } from "react";
 
+/**
+ * LoanForm - A form component to add or edit a loan.
+ *
+ * Props:
+ * - existingLoan: (optional) The loan object if editing an existing loan.
+ * - onSubmit: Function to handle form submission.
+ * - onClose: Function to close the modal.
+ * - setNotification: Function to set notifications.
+ */
 function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
   const [formData, setFormData] = useState({
     loanID: "",
@@ -7,14 +17,16 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     loanAmount: "",
     interestRate: "",
     startDate: "",
+    termMonths: "",
     endDate: "",
     adminFee: "",
   });
   const [clients, setClients] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [termMonths, settermMonths] = useState("");
 
-  // Helper to format numbers with commas
+  /**
+   * Helper to format numbers with commas
+   */
   const formatNumber = (value) => {
     if (!value) return "";
     const parts = value.toString().split(".");
@@ -22,9 +34,14 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     return parts.join(".");
   };
 
-  // Helper to parse formatted numbers back to plain numbers
+  /**
+   * Helper to parse formatted numbers back to plain numbers
+   */
   const parseNumber = (value) => value.replace(/,/g, "");
 
+  /**
+   * Generates a random Loan ID
+   */
   const generateRandomLoanID = () => {
     const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let result = "LN";
@@ -34,6 +51,9 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     return result;
   };
 
+  /**
+   * Fetch clients from the server
+   */
   const fetchClients = async () => {
     try {
       const response = await fetch("http://13.246.7.5:5000/api/clients");
@@ -48,32 +68,25 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     }
   };
 
-  const calculatetermMonths = (start, end) => {
+  /**
+   * Calculate End Date based on Start Date and Term Months
+   */
+  const calculateEndDate = (start, term) => {
+    if (!start || !term) return "";
     const startDate = new Date(start);
-    const endDate = new Date(end);
-
-    if (isNaN(startDate) || isNaN(endDate)) {
-      console.error("Invalid dates provided.");
-      return null;
+    if (isNaN(startDate)) return "";
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + parseInt(term, 10));
+    // Adjust for month overflow
+    if (endDate.getDate() !== startDate.getDate()) {
+      endDate.setDate(0); // Set to last day of previous month
     }
-
-    if (endDate <= startDate) {
-      console.error("End Date must be after Start Date.");
-      return null;
-    }
-
-    let years = endDate.getFullYear() - startDate.getFullYear();
-    let months = endDate.getMonth() - startDate.getMonth();
-    let totalMonths = years * 12 + months;
-
-    if (endDate.getDate() < startDate.getDate()) {
-      totalMonths -= 1;
-    }
-
-    return totalMonths > 0 ? totalMonths : null;
+    return endDate.toISOString().split("T")[0];
   };
 
-  // Calculate interest earned
+  /**
+   * Calculate interest earned
+   */
   const calculateInterestEarned = () => {
     const loanAmount = parseFloat(parseNumber(formData.loanAmount));
     const interestRate = parseFloat(formData.interestRate);
@@ -81,7 +94,9 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     return (loanAmount * interestRate).toFixed(2);
   };
 
-  // Calculate admin fee amount
+  /**
+   * Calculate admin fee amount
+   */
   const calculateAdminFeeAmount = () => {
     const loanAmount = parseFloat(parseNumber(formData.loanAmount));
     const adminFeePercentage = parseFloat(formData.adminFee);
@@ -89,12 +104,14 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     return (loanAmount * adminFeePercentage).toFixed(2);
   };
 
-  // Calculate monthly required payment
+  /**
+   * Calculate monthly required payment
+   */
   const calculateMonthlyAmount = () => {
     const loanAmount = parseFloat(parseNumber(formData.loanAmount));
     const interestEarned = parseFloat(calculateInterestEarned());
     const adminFeeAmount = parseFloat(calculateAdminFeeAmount());
-    const termMonthsNum = parseInt(termMonths, 10);
+    const termMonthsNum = parseInt(formData.termMonths, 10);
 
     if (
       isNaN(loanAmount) ||
@@ -109,6 +126,9 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     return (total / termMonthsNum).toFixed(2);
   };
 
+  /**
+   * Initialize form data on component mount or when editing an existing loan
+   */
   useEffect(() => {
     fetchClients();
     if (!existingLoan) {
@@ -116,6 +136,9 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     }
   }, [existingLoan]);
 
+  /**
+   * Populate form data when editing an existing loan
+   */
   useEffect(() => {
     if (existingLoan) {
       setFormData({
@@ -124,43 +147,46 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
         loanAmount: formatNumber(existingLoan.loanAmount),
         interestRate: existingLoan.interestRate || "",
         startDate: existingLoan.startDate?.split("T")[0] || "",
+        termMonths: existingLoan.termMonths || "",
         endDate: existingLoan.endDate?.split("T")[0] || "",
         adminFee: formatNumber(existingLoan.adminFee),
       });
-
-      if (existingLoan.startDate && existingLoan.endDate) {
-        settermMonths(
-          calculatetermMonths(
-            existingLoan.startDate,
-            existingLoan.endDate
-          ) || ""
-        );
-      }
     }
   }, [existingLoan]);
 
+  /**
+   * Handle input changes
+   */
   const handleChange = (e) => {
     const { name, value } = e.target;
+
+    // Handle number formatting for loanAmount and adminFee
     if (name === "loanAmount" || name === "adminFee") {
       const numericValue = value.replace(/[^0-9.]/g, "");
       setFormData((prev) => ({ ...prev, [name]: formatNumber(numericValue) }));
-    } else if (name === "startDate" || name === "endDate") {
-      const newFormData = { ...formData, [name]: value };
-      setFormData(newFormData);
+    }
+    // Handle changes to startDate or termMonths to recalculate endDate
+    else if (name === "startDate" || name === "termMonths") {
+      setFormData((prev) => ({ ...prev, [name]: value }));
 
-      const terms = calculatetermMonths(
-        newFormData.startDate,
-        newFormData.endDate
-      );
-      settermMonths(terms || "");
-    } else {
+      const newStartDate = name === "startDate" ? value : formData.startDate;
+      const newTermMonths = name === "termMonths" ? value : formData.termMonths;
+      const newEndDate = calculateEndDate(newStartDate, newTermMonths);
+
+      setFormData((prev) => ({ ...prev, endDate: newEndDate }));
+    }
+    // Handle other fields
+    else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
+  /**
+   * Handle form submission
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const { clientID, loanAmount, interestRate, startDate, endDate, adminFee } =
+    const { clientID, loanAmount, interestRate, startDate, termMonths, adminFee } =
       formData;
 
     if (
@@ -168,7 +194,6 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
       !loanAmount ||
       !interestRate ||
       !startDate ||
-      !endDate ||
       !termMonths ||
       !adminFee
     ) {
@@ -180,36 +205,40 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     }
 
     setIsSubmitting(true);
+
     try {
       await onSubmit({
         ...formData,
-        termMonths: parseInt(termMonths, 10),
+        termMonths: parseInt(formData.termMonths, 10),
         loanAmount: parseFloat(parseNumber(formData.loanAmount)),
         interestRate: parseFloat(formData.interestRate),
         adminFee: parseFloat(parseNumber(formData.adminFee)),
       });
-      onClose();
+      onClose(); // Close modal only on successful submission
     } catch (err) {
       setNotification?.({ type: "error", message: err.message });
+      // Do not call onClose(), keep the modal open to show the error
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  /**
+   * Determine if loan summary can be calculated
+   */
   const canCalculate = () => {
-    const { loanAmount, interestRate, adminFee, startDate, endDate } = formData;
+    const { loanAmount, interestRate, adminFee, startDate, termMonths } = formData;
     return (
       loanAmount &&
       interestRate &&
       adminFee &&
       startDate &&
-      endDate &&
       termMonths
     );
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="space-y-6">
       {/* Loan ID - always non-editable */}
       <div>
         <label htmlFor="loanID" className="block text-gray-700 font-medium">
@@ -303,7 +332,25 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
         />
       </div>
 
-      {/* End Date */}
+      {/* Repayment Terms (Term Months) */}
+      <div>
+        <label htmlFor="termMonths" className="block text-gray-700 font-medium">
+          Repayment Terms (Months):
+        </label>
+        <input
+          type="number"
+          id="termMonths"
+          name="termMonths"
+          value={formData.termMonths}
+          onChange={handleChange}
+          placeholder="Enter number of repayment months"
+          className="w-full p-2 rounded-md bg-white border border-gray-300 focus:ring-2 focus:ring-blue-500"
+          required
+          min="1"
+        />
+      </div>
+
+      {/* End Date - Automatically Calculated */}
       <div>
         <label htmlFor="endDate" className="block text-gray-700 font-medium">
           End Date:
@@ -313,25 +360,6 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
           id="endDate"
           name="endDate"
           value={formData.endDate}
-          onChange={handleChange}
-          className="w-full p-2 rounded-md bg-white border border-gray-300 focus:ring-2 focus:ring-blue-500"
-          required
-        />
-      </div>
-
-      {/* Repayment Terms (Read-Only) */}
-      <div>
-        <label
-          htmlFor="termMonths"
-          className="block text-gray-700 font-medium"
-        >
-          Number of Repayment Months:
-        </label>
-        <input
-          type="text"
-          id="termMonths"
-          name="termMonths"
-          value={termMonths ? termMonths : ""}
           disabled
           className="w-full p-2 rounded-md bg-gray-100 border border-gray-300 cursor-not-allowed"
         />
@@ -368,8 +396,8 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
         ) : (
           <>
             <p>
-              <strong>Payment Terms:</strong>{" "}
-              {termMonths} month{termMonths > 1 ? "s" : ""}
+              <strong>Repayment Terms:</strong>{" "}
+              {formData.termMonths} month{formData.termMonths > 1 ? "s" : ""}
             </p>
             <p>
               <strong>Interest Earned:</strong>{" "}
@@ -383,25 +411,31 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
               <strong>Monthly Required Amount:</strong>{" "}
               {formatNumber(calculateMonthlyAmount())}
             </p>
+            <p>
+              <strong>End Date:</strong> {formData.endDate || "N/A"}
+            </p>
           </>
         )}
       </div>
 
-      <button
-        type="submit"
-        disabled={isSubmitting || !canCalculate()}
-        className={`w-full p-2 rounded-md text-white font-semibold transition-all ${
-          isSubmitting || !canCalculate()
-            ? "bg-gray-500 cursor-not-allowed"
-            : "bg-blue-500 hover:bg-blue-600"
-        }`}
-      >
-        {isSubmitting
-          ? "Saving..."
-          : existingLoan
-          ? "Update Loan"
-          : "Create Loan"}
-      </button>
+      {/* Submit Button */}
+      <div>
+        <button
+          type="submit"
+          disabled={isSubmitting || !canCalculate()}
+          className={`w-full p-2 rounded-md text-white font-semibold transition-all ${
+            isSubmitting || !canCalculate()
+              ? "bg-gray-500 cursor-not-allowed"
+              : "bg-blue-500 hover:bg-blue-600"
+          }`}
+        >
+          {isSubmitting
+            ? "Saving..."
+            : existingLoan
+            ? "Update Loan"
+            : "Create Loan"}
+        </button>
+      </div>
     </form>
   );
 }

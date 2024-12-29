@@ -71,31 +71,47 @@ const PaymentList = ({ payments, refreshPayments, clients = [] }) => {
   };
 
   // Delete payment
-  const handleDeletePayment = async (paymentID) => {
-    if (!window.confirm("Are you sure you want to delete this payment?")) {
-      return;
+// Delete payment
+const handleDeletePayment = async (paymentID) => {
+  if (!window.confirm("Are you sure you want to delete this payment?")) {
+    return;
+  }
+
+  try {
+    // Fetch the payment by paymentID to get its _id
+    const responseGet = await fetch(`http://13.246.7.5:5000/api/payments?paymentID=${paymentID}`);
+    if (!responseGet.ok) {
+      throw new Error("Failed to fetch payment details for deletion.");
     }
 
-    try {
-      const response = await fetch(`http://13.246.7.5:5000/api/payments/${paymentID}`, {
-        method: "DELETE",
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.message || "Error deleting payment.");
-      }
-
-      setNotification({
-        type: "success",
-        message: "Payment deleted successfully!",
-      });
-      await refreshPayments();
-    } catch (error) {
-      console.error("Error deleting payment:", error);
-      setNotification({ type: "error", message: error.message });
+    const { data: paymentData } = await responseGet.json();
+    if (!paymentData || paymentData.length === 0) {
+      throw new Error("Payment not found.");
     }
-  };
+
+    const paymentToDelete = paymentData[0]._id; // Use the actual MongoDB ObjectId
+
+    // Delete the payment using its _id
+    const responseDelete = await fetch(`http://13.246.7.5:5000/api/payments/${paymentToDelete}`, {
+      method: "DELETE",
+    });
+
+    const result = await responseDelete.json();
+    if (!responseDelete.ok) {
+      throw new Error(result.message || "Error deleting payment.");
+    }
+
+    setNotification({
+      type: "success",
+      message: "Payment deleted successfully!",
+    });
+    await refreshPayments();
+  } catch (error) {
+    console.error("Error deleting payment:", error);
+    setNotification({ type: "error", message: error.message });
+  }
+};
+
 
   // View payment details
   const handleViewDetails = (payment) => {

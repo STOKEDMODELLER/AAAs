@@ -5,39 +5,29 @@ import Modal from "./Modal";
 import LoanForm from "./LoanForm";
 import LoanView from "./LoanView";
 
-/**
- * LoanList: Manages loans and displays them in a table.
- * - Fetches loans and their associated client names.
- * - Allows viewing, editing, and creating loans through modals.
- */
 function LoanList({ loans, fetchLoans }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  // For client data
   const [clients, setClients] = useState([]);
-
-  // For modals (view/edit/create)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("view");
   const [selectedLoan, setSelectedLoan] = useState(null);
-
-  // Notification for modal
+  const [payments, setPayments] = useState([]);
   const [notification, setNotification] = useState(null);
 
-  /**
-   * Fetch clients and map their data
-   */
+  // Fetch clients
   const fetchClients = useCallback(async () => {
     try {
+      setLoading(true);
       const response = await fetch("http://13.246.7.5:5000/api/clients");
-      if (!response.ok) {
-        throw new Error(`Error fetching clients: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Failed to fetch clients: ${response.status}`);
       const { data } = await response.json();
       setClients(data || []);
     } catch (err) {
-      console.error("Error fetching clients:", err);
+      console.error("Error fetching clients:", err.message);
+      setError("Unable to load client data. Please try again later.");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -45,36 +35,53 @@ function LoanList({ loans, fetchLoans }) {
     fetchClients();
   }, [fetchClients]);
 
-  /**
-   * Opens the modal in the specified mode.
-   */
-  const openModal = (mode, loan = null) => {
-    setModalMode(mode);
-    setSelectedLoan(loan);
-    setNotification(null);
-    setIsModalOpen(true);
+  // Fetch payments for a loan
+  const fetchPaymentsByLoan = async (loanID) => {
+    try {
+      const response = await fetch(`http://13.246.7.5:5000/api/payments?loanID=${loanID}`);
+      if (!response.ok) throw new Error(`Failed to fetch payments: ${response.status}`);
+      const { data } = await response.json();
+      return data;
+    } catch (err) {
+      console.error(`Error fetching payments for loan ${loanID}:`, err.message);
+      return [];
+    }
   };
 
+  // Open modal with specified mode and loan
+// Open modal with specified mode and loan
+const openModal = async (mode, loan = null) => {
+  setModalMode(mode);
+  setSelectedLoan(loan);
+  setNotification(null);
+
+  if (mode === "delete" && loan) {
+    const allPayments = await fetchAllPayments(); // Fetch all payments
+    const relatedPayments = filterPaymentsByLoan(allPayments, loan.loanID); // Filter payments for the selected loan
+    setPayments(relatedPayments); // Set related payments for statistics
+  }
+  setIsModalOpen(true);
+};
+
+
+  // Close modal
   const closeModal = () => {
     setSelectedLoan(null);
     setIsModalOpen(false);
     setNotification(null);
+    setPayments([]);
     setModalMode("view");
   };
 
-  /**
-   * Submits a new or updated loan
-   */
+  // Handle create or edit loan submission
   const handleSubmitLoan = async (loanData) => {
     try {
-      const isEdit = !!(selectedLoan && selectedLoan._id);
-      let url = "http://13.246.7.5:5000/api/loans";
-      let method = "POST";
-
-      if (isEdit) {
-        url = `http://13.246.7.5:5000/api/loans/${selectedLoan._id}`;
-        method = "PUT";
-      }
+      setLoading(true);
+      const method = modalMode === "edit" ? "PUT" : "POST";
+      const url =
+        modalMode === "edit"
+          ? `http://13.246.7.5:5000/api/loans/${selectedLoan._id}`
+          : "http://13.246.7.5:5000/api/loans";
 
       const response = await fetch(url, {
         method,
@@ -82,60 +89,91 @@ function LoanList({ loans, fetchLoans }) {
         body: JSON.stringify(loanData),
       });
 
-      const result = await response.json();
       if (!response.ok) {
-        throw new Error(result.message || "Failed to save loan details.");
+        const { message } = await response.json();
+        throw new Error(message || "Failed to save loan details.");
       }
 
       setNotification({ type: "success", message: "Loan saved successfully!" });
-      await fetchLoans();
+      await fetchLoans(); // Refresh loans
+      closeModal();
     } catch (err) {
+      console.error("Error saving loan:", err.message);
       setNotification({ type: "error", message: err.message });
+    } finally {
+      setLoading(false);
     }
   };
 
-  /**
-   * Maps the client name to each loan
-   */
+  // Handle delete loan
+  const handleDeleteLoan = async () => {
+    if (!selectedLoan) return;
+
+    try {
+      setLoading(true);
+      const response = await fetch(`http://13.246.7.5:5000/api/loans/${selectedLoan._id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const { message } = await response.json();
+        throw new Error(message || "Failed to delete loan.");
+      }
+
+      setNotification({ type: "success", message: "Loan deleted successfully!" });
+      await fetchLoans(); // Refresh loans
+      closeModal();
+    } catch (err) {
+      console.error(`Error deleting loan ${selectedLoan.loanID}:`, err.message);
+      setNotification({ type: "error", message: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Map client names to loans
   const loansWithClientNames = useMemo(() => {
     return loans.map((loan) => {
       const client = clients.find((c) => c._id === loan.clientID);
-      return {
-        ...loan,
-        clientName: client ? client.name : "Unknown Client",
-      };
+      return { ...loan, clientName: client ? client.name : "Unknown Client" };
     });
   }, [loans, clients]);
+// Fetch all payments
+const fetchAllPayments = async () => {
+  try {
+    const response = await fetch("http://13.246.7.5:5000/api/payments");
+    if (!response.ok) throw new Error(`Failed to fetch payments: ${response.status}`);
+    const { data } = await response.json();
+    return data || [];
+  } catch (err) {
+    console.error("Error fetching payments:", err.message);
+    return [];
+  }
+};
 
-  /**
-   * Table columns for the GlobalDataTable
-   */
+// Filter payments for the selected loan
+const filterPaymentsByLoan = (allPayments, loanID) => {
+  return allPayments.filter((payment) => payment.loanID === loanID);
+};
+
+  // Table columns
   const columns = useMemo(
     () => [
       { Header: "Loan ID", accessor: "loanID" },
-      {
-        Header: "Client",
-        accessor: "clientName", // Use mapped client name
-      },
+      { Header: "Client", accessor: "clientName" },
       { Header: "Amount", accessor: "loanAmount" },
+      { Header: "Interest", accessor: "interestRate", Cell: ({ value }) => `${(value * 100).toFixed(2)}%` },
       {
-        Header: "Interest",
-        accessor: "interestRate",
-        Cell: ({ value }) => {
-          if (!value) return "N/A";
-          const percent = (parseFloat(value) * 100).toFixed(2);
-          return `${percent}%`;
+        Header: "Total Amount",
+        accessor: "totalAmount",
+        Cell: ({ row }) => {
+          const loanAmount = parseFloat(row.original.loanAmount || 0);
+          const interestRate = parseFloat(row.original.interestRate || 0);
+          const totalAmount = loanAmount + loanAmount * interestRate;
+          return `$${totalAmount.toFixed(2)}`;
         },
       },
-      {
-        Header: "Admin Fee",
-        accessor: "adminFee",
-        Cell: ({ value }) => {
-          if (!value) return "N/A";
-          const percent = (parseFloat(value) * 100).toFixed(2);
-          return `${percent}%`;
-        },
-      },
+      { Header: "Admin Fee", accessor: "adminFee", Cell: ({ value }) => `${(value * 100).toFixed(2)}%` },
       {
         Header: "Actions",
         Cell: ({ row }) => {
@@ -154,17 +192,22 @@ function LoanList({ loans, fetchLoans }) {
               >
                 Edit
               </button>
+              <button
+                onClick={() => openModal("delete", loan)}
+                className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition"
+              >
+                Delete
+              </button>
             </div>
           );
         },
       },
     ],
-    []
+    [openModal]
   );
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-4">
-      {/* Header Row for adding a new Loan */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Loans</h2>
         <button
@@ -175,27 +218,18 @@ function LoanList({ loans, fetchLoans }) {
         </button>
       </div>
 
-      <p className="text-gray-500 mb-4">
-        Manage all of your loans in one convenient table. Use "View" for a
-        read-only summary, or "Edit" to update any details. Remember that
-        interest and admin fee are decimals: e.g. 0.1 => 10% or 0.05 => 5%.
-      </p>
-
       {loading && <Notification type="info" message="Loading data..." />}
       {error && <Notification type="error" message={error} />}
 
-      {/* Global Data Table */}
       <GlobalDataTable
         title="Loan Table"
         columns={columns}
         data={loansWithClientNames}
         loading={loading}
         error={error}
-        onGlobalFilterChange={() => {}}
         initialPageSize={5}
       />
 
-      {/* Modal for viewing / editing / creating */}
       <Modal
         isOpen={isModalOpen}
         onClose={closeModal}
@@ -204,26 +238,43 @@ function LoanList({ loans, fetchLoans }) {
             ? "Create a New Loan"
             : modalMode === "edit"
             ? `Edit Loan: ${selectedLoan?.loanID || ""}`
+            : modalMode === "delete"
+            ? `Delete Loan: ${selectedLoan?.loanID || ""}`
             : `View Loan: ${selectedLoan?.loanID || ""}`
         }
         description={
-          modalMode === "create"
-            ? "Fill out the required fields for your new loan. For interest or admin fee, use decimals (0.1 => 10%)."
-            : modalMode === "edit"
-            ? "Revise the loan details below, especially decimals for interest/admin fee. Then click 'Update Loan'."
-            : "Here is a read-only overview of this loan."
+          modalMode === "delete"
+            ? `This loan has ${payments.length} associated payments totaling $${payments
+                .reduce((sum, p) => sum + p.amount, 0)
+                .toFixed(2)}. Deleting this loan will permanently remove all associated data.`
+            : ""
         }
         notification={notification}
       >
-        {modalMode === "view" && <LoanView loan={selectedLoan} />}
-
-        {(modalMode === "edit" || modalMode === "create") && (
+        {modalMode === "create" || modalMode === "edit" ? (
           <LoanForm
             existingLoan={modalMode === "edit" ? selectedLoan : null}
             onSubmit={handleSubmitLoan}
             onClose={closeModal}
             setNotification={setNotification}
           />
+        ) : modalMode === "view" ? (
+          <LoanView loan={selectedLoan} />
+        ) : modalMode === "delete" && (
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={closeModal}
+              className="px-4 py-2 bg-gray-300 text-black rounded hover:bg-gray-400"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteLoan}
+              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            >
+              Confirm Delete
+            </button>
+          </div>
         )}
       </Modal>
     </div>

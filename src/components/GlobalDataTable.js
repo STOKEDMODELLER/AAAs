@@ -23,6 +23,7 @@ import Notification from "./Notification";
  * - title (optional): String displayed as table title
  * - onGlobalFilterChange (optional): Callback to enable searching
  * - initialPageSize (optional): number, sets initial page size (default: 5)
+ * - pageSizeOptions (optional): Array of numbers for rows per page
  */
 function GlobalDataTable({
   columns,
@@ -32,13 +33,13 @@ function GlobalDataTable({
   title = "Data Table",
   onGlobalFilterChange,
   initialPageSize = 5,
+  pageSizeOptions = [5, 10, 20],
 }) {
   const {
     getTableProps,
     getTableBodyProps,
     headerGroups,
     prepareRow,
-    // The current 'page' of rows, plus pagination
     page,
     canPreviousPage,
     canNextPage,
@@ -46,7 +47,8 @@ function GlobalDataTable({
     gotoPage,
     nextPage,
     previousPage,
-    state: { pageIndex },
+    setPageSize,
+    state: { pageIndex, pageSize },
     setGlobalFilter,
   } = useTable(
     {
@@ -60,7 +62,6 @@ function GlobalDataTable({
     usePagination
   );
 
-  // If parent wants global filtering, we handle it here
   const handleGlobalFilter = (event) => {
     setGlobalFilter(event.target.value);
     if (onGlobalFilterChange) onGlobalFilterChange(event.target.value);
@@ -68,7 +69,7 @@ function GlobalDataTable({
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-4">
-      {/* Table title + optional filter */}
+      {/* Table Title & Global Filter */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">{title}</h2>
         {onGlobalFilterChange && (
@@ -81,7 +82,7 @@ function GlobalDataTable({
         )}
       </div>
 
-      {/* Loading / Error states */}
+      {/* Loading & Error States */}
       {loading && <Notification type="info" message="Loading data..." />}
       {error && <Notification type="error" message={error} />}
 
@@ -116,72 +117,108 @@ function GlobalDataTable({
             ))}
           </thead>
           <tbody {...getTableBodyProps()}>
-            {page.map((row) => {
-              prepareRow(row);
-              return (
-                <tr
-                  {...row.getRowProps()}
-                  className="hover:bg-gray-50 border-b border-gray-200"
+            {page.length > 0 ? (
+              page.map((row) => {
+                prepareRow(row);
+                return (
+                  <tr
+                    {...row.getRowProps()}
+                    className="hover:bg-gray-50 border-b border-gray-200"
+                  >
+                    {row.cells.map((cell) => (
+                      <td
+                        {...cell.getCellProps()}
+                        className="px-6 py-4 text-sm text-gray-700"
+                      >
+                        {cell.render("Cell")}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="px-6 py-4 text-sm text-gray-500 text-center"
                 >
-                  {row.cells.map((cell) => (
-                    <td
-                      {...cell.getCellProps()}
-                      className="px-6 py-4 text-sm text-gray-700"
-                    >
-                      {cell.render("Cell")}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
+                  No data available
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       {/* Pagination Controls */}
-      <div className="flex items-center justify-center mt-4 space-x-2">
-        <button
-          onClick={() => gotoPage(0)}
-          disabled={!canPreviousPage}
-          className={`px-2 py-1 border rounded ${
-            !canPreviousPage ? "bg-gray-300 cursor-not-allowed" : "bg-gray-200"
-          }`}
-        >
-          {"<<"}
-        </button>
-        <button
-          onClick={() => previousPage()}
-          disabled={!canPreviousPage}
-          className={`px-2 py-1 border rounded ${
-            !canPreviousPage ? "bg-gray-300 cursor-not-allowed" : "bg-gray-200"
-          }`}
-        >
-          {"<"}
-        </button>
-        <span className="mx-2">
-          Page{" "}
-          <strong>
-            {pageIndex + 1} of {pageOptions.length}
-          </strong>
-        </span>
-        <button
-          onClick={() => nextPage()}
-          disabled={!canNextPage}
-          className={`px-2 py-1 border rounded ${
-            !canNextPage ? "bg-gray-300 cursor-not-allowed" : "bg-gray-200"
-          }`}
-        >
-          {">"}
-        </button>
-        <button
-          onClick={() => gotoPage(pageOptions.length - 1)}
-          disabled={!canNextPage}
-          className={`px-2 py-1 border rounded ${
-            !canNextPage ? "bg-gray-300 cursor-not-allowed" : "bg-gray-200"
-          }`}
-        >
-          {">>"}
-        </button>
+      <div className="flex items-center justify-between mt-4">
+        {/* Rows per page */}
+        <div className="flex items-center space-x-2">
+          <label className="text-sm text-gray-600">Rows per page:</label>
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            className="px-2 py-1 border rounded focus:outline-none"
+          >
+            {pageSizeOptions.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Pagination Buttons */}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => gotoPage(0)}
+            disabled={!canPreviousPage}
+            className={`px-2 py-1 border rounded ${
+              !canPreviousPage
+                ? "bg-gray-300 cursor-not-allowed"
+                : "bg-gray-200"
+            }`}
+          >
+            {"<<"}
+          </button>
+          <button
+            onClick={() => previousPage()}
+            disabled={!canPreviousPage}
+            className={`px-2 py-1 border rounded ${
+              !canPreviousPage
+                ? "bg-gray-300 cursor-not-allowed"
+                : "bg-gray-200"
+            }`}
+          >
+            {"<"}
+          </button>
+          <span className="text-sm text-gray-600">
+            Page <strong>{pageIndex + 1}</strong> of{" "}
+            <strong>{pageOptions.length}</strong>
+          </span>
+          <button
+            onClick={() => nextPage()}
+            disabled={!canNextPage}
+            className={`px-2 py-1 border rounded ${
+              !canNextPage
+                ? "bg-gray-300 cursor-not-allowed"
+                : "bg-gray-200"
+            }`}
+          >
+            {">"}
+          </button>
+          <button
+            onClick={() => gotoPage(pageOptions.length - 1)}
+            disabled={!canNextPage}
+            className={`px-2 py-1 border rounded ${
+              !canNextPage
+                ? "bg-gray-300 cursor-not-allowed"
+                : "bg-gray-200"
+            }`}
+          >
+            {">>"}
+          </button>
+        </div>
       </div>
     </div>
   );

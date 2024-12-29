@@ -16,31 +16,29 @@ const Report = ({
     if (!selectedLoan) return [];
     const { interestRate, loanAmount, termMonths = 12 } = selectedLoan;
 
-    const monthlyInterestRate = interestRate / 12; // Convert annual interest rate to monthly
     const monthlyPrincipal = loanAmount / termMonths; // Fixed monthly principal
+    const monthlyInterestRate = interestRate / 12; // Convert annual interest rate to monthly
 
     let balance = loanAmount;
     const projectedPayments = [];
 
     for (let term = 1; term <= termMonths; term++) {
-        const interest = balance * monthlyInterestRate; // Monthly interest based on current balance
-        const totalPayment = monthlyPrincipal + interest; // Total monthly payment
-        balance = Math.max(balance - monthlyPrincipal, 0); // Reduce balance by principal payment
+      const interest = parseFloat((balance * monthlyInterestRate).toFixed(2)); // Monthly interest
+      const totalPayment = parseFloat((monthlyPrincipal + interest).toFixed(2)); // Total payment
+      balance = Math.max(parseFloat((balance - monthlyPrincipal).toFixed(2)), 0); // Update balance
 
-        projectedPayments.push({
-            term,
-            date: new Date(new Date().setMonth(new Date().getMonth() + term)), // Calculate future date
-            principal: parseFloat(monthlyPrincipal.toFixed(2)), // Ensure principal is a float
-            interest: parseFloat(interest.toFixed(2)), // Ensure interest is a float
-            totalPayment: parseFloat(totalPayment.toFixed(2)), // Ensure total payment is a float
-            remainingBalance: parseFloat(balance.toFixed(2)), // Ensure balance is a float
-        });
+      projectedPayments.push({
+        term,
+        date: new Date(new Date().setMonth(new Date().getMonth() + term)), // Future date
+        principal: parseFloat(monthlyPrincipal.toFixed(2)),
+        interest,
+        totalPayment,
+        remainingBalance: balance,
+      });
     }
 
     return projectedPayments;
-};
-
-
+  };
 
   const projectedPayments = calculateProjectedPayments();
 
@@ -115,7 +113,7 @@ const Report = ({
               <option value="">-- Select a Loan --</option>
               {filteredLoans.map((loan) => (
                 <option key={loan.loanID} value={loan.loanID}>
-                  {loan.loanID} - ${loan.loanAmount.toLocaleString()}
+                  {loan.loanID} - {loan.loanAmount.toLocaleString()}
                 </option>
               ))}
             </select>
@@ -125,7 +123,6 @@ const Report = ({
         {selectedClient && selectedLoan && (
           <>
             <div className="space-y-6">
-              {/* Client and Loan Details */}
               <div className="bg-gray-50 p-6 rounded-lg shadow">
                 <h3 className="text-xl font-semibold text-gray-800">Client Details</h3>
                 <p><strong>Name:</strong> {selectedClient.name}</p>
@@ -135,23 +132,23 @@ const Report = ({
               <div className="bg-gray-50 p-6 rounded-lg shadow">
                 <h3 className="text-xl font-semibold text-gray-800">Loan Details</h3>
                 <p><strong>Loan ID:</strong> {selectedLoan.loanID}</p>
-                <p><strong>Loan Amount:</strong> ${selectedLoan.loanAmount.toLocaleString()}</p>
+                <p><strong>Loan Amount:</strong> {selectedLoan.loanAmount.toLocaleString()}</p>
                 <p><strong>Interest Rate:</strong> {(selectedLoan.interestRate * 100).toFixed(2)}%</p>
                 <p><strong>Repayment Terms:</strong> {selectedLoan.termMonths || 12} months</p>
-                <p><strong>Admin Fee:</strong> ${selectedLoan.adminFee?.toLocaleString() || 0}</p>
+                <p><strong>Admin Fee:</strong> {selectedLoan.adminFee?.toLocaleString() || 0}</p>
               </div>
             </div>
 
-            {/* Record of Paid Amounts */}
+            {/* Payments Made Section */}
             <div className="overflow-x-auto">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Record of Paid Amounts</h3>
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">Payments Made</h3>
               {payments.length > 0 ? (
                 <table className="min-w-full bg-white border border-gray-300 rounded-lg">
                   <thead className="bg-gray-100">
                     <tr>
                       <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Payment Date</th>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Amount ($)</th>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Outstanding Balance ($)</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Amount</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Outstanding Balance</th>
                       <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Description</th>
                     </tr>
                   </thead>
@@ -159,8 +156,8 @@ const Report = ({
                     {sortedPayments.map((payment) => (
                       <tr key={payment._id} className="border-t">
                         <td className="py-4 px-6 text-sm text-gray-700">{new Date(payment.paymentDate).toLocaleDateString()}</td>
-                        <td className="py-4 px-6 text-sm text-gray-700">${parseFloat(payment.amount).toLocaleString()}</td>
-                        <td className="py-4 px-6 text-sm text-gray-700">${parseFloat(payment.outstandingBalance || 0).toLocaleString()}</td>
+                        <td className="py-4 px-6 text-sm text-gray-700">{payment.amount.toLocaleString()}</td>
+                        <td className="py-4 px-6 text-sm text-gray-700">{payment.outstandingBalance?.toLocaleString() || 0}</td>
                         <td className="py-4 px-6 text-sm text-gray-700">{payment.description || "N/A"}</td>
                       </tr>
                     ))}
@@ -171,7 +168,7 @@ const Report = ({
               )}
             </div>
 
-            {/* Projected Payment Schedule */}
+            {/* Projected Payments Section */}
             <div className="overflow-x-auto">
               <h3 className="text-xl font-semibold text-gray-800 mb-4">Projected Payment Schedule</h3>
               {projectedPayments.length > 0 ? (
@@ -180,21 +177,21 @@ const Report = ({
                     <tr>
                       <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Term</th>
                       <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Payment Date</th>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Principal ($)</th>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Interest ($)</th>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Total Payment ($)</th>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Remaining Balance ($)</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Principal</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Interest</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Total Payment</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Remaining Balance</th>
                     </tr>
                   </thead>
                   <tbody>
                     {projectedPayments.map((payment) => (
                       <tr key={payment.term} className="border-t">
                         <td className="py-4 px-6 text-sm text-gray-700">{payment.term}</td>
-                        <td className="py-4 px-6 text-sm text-gray-700">{new Date(payment.date).toLocaleDateString()}</td>
-                        <td className="py-4 px-6 text-sm text-gray-700">${payment.principal.toFixed(2)}</td>
-                        <td className="py-4 px-6 text-sm text-gray-700">${payment.interest.toFixed(2)}</td>
-                        <td className="py-4 px-6 text-sm text-gray-700">${payment.totalPayment.toFixed(2)}</td>
-                        <td className="py-4 px-6 text-sm text-gray-700">${payment.remainingBalance.toFixed(2)}</td>
+                        <td className="py-4 px-6 text-sm text-gray-700">{payment.date.toLocaleDateString()}</td>
+                        <td className="py-4 px-6 text-sm text-gray-700">{payment.principal.toFixed(2)}</td>
+                        <td className="py-4 px-6 text-sm text-gray-700">{payment.interest.toFixed(2)}</td>
+                        <td className="py-4 px-6 text-sm text-gray-700">{payment.totalPayment.toFixed(2)}</td>
+                        <td className="py-4 px-6 text-sm text-gray-700">{payment.remainingBalance.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>

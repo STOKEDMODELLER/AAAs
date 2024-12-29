@@ -43,12 +43,17 @@ const App = () => {
       setNotification({ type: "error", message: error.message });
     }
   };
+
+  const fetchLoans = async () => {
+    await fetchData("http://13.246.7.5:5000/api/loans", setLoans, "loans");
+  };
+
   useEffect(() => {
     setLoading(true);
-
+  
     Promise.all([
       fetchData("http://13.246.7.5:5000/api/clients", setClients, "clients"),
-      fetchData("http://13.246.7.5:5000/api/loans", setLoans, "loans"),
+      fetchLoans(),
       fetchData("http://13.246.7.5:5000/api/payments", setPayments, "payments"),
     ]).finally(() => setLoading(false));
   }, []);
@@ -99,8 +104,10 @@ const App = () => {
               <h2 className="text-2xl font-semibold text-gray-700 mb-4">Loans</h2>
               <LoanList
                 loans={loans}
-                onSelectLoan={(loan) => setSelectedLoan(loan)}
+                onSelectLoan={(loan) => setSelectedClient(loan)}
+                fetchLoans={fetchLoans} // Pass the fetchLoans function
               />
+
             </section>
 
             <section>
