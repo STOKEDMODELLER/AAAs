@@ -94,6 +94,7 @@ router.put("/:id", async (req, res, next) => {
   }
 });
 
+// Delete a payment
 router.delete("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -110,6 +111,8 @@ router.delete("/:id", async (req, res, next) => {
     next(error);
   }
 });
+
+
 // Get payment by paymentID
 router.get("/by-payment-id/:paymentID", async (req, res, next) => {
   try {

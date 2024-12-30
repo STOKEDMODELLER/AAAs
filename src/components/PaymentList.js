@@ -1,21 +1,65 @@
-import React, { useState } from "react";
+// src/components/PaymentList.js
+
+import React, { useState, useEffect, useMemo } from "react";
 import GlobalDataTable from "./GlobalDataTable";
 import Modal from "./Modal";
 import PaymentForm from "./PaymentForm";
 import PaymentDetails from "./PaymentDetails";
 import Notification from "./Notification";
+import { formatCurrency } from "../utils/formatNumber"; // **Importing the Utility Function**
+import PropTypes from "prop-types"; // **For Prop Types Validation**
 
-const PaymentList = ({ payments, refreshPayments, clients = [] }) => {
+const PaymentList = ({ clients = [], refreshTrigger }) => {
+  const [payments, setPayments] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [loans, setLoans] = useState({}); // **Map loanID to currency**
 
-  // Helper function to map clientID to clientName
-  const getClientName = (clientID) => {
-    const client = clients.find((c) => c._id === clientID); // Use `_id` for matching
-    return client ? client.name : "Unknown Client";
+  /**
+   * Fetch all loans and create a mapping from loanID to currency
+   */
+  const fetchLoans = async () => {
+    try {
+      const response = await fetch("http://13.246.7.5:5000/api/loans");
+      if (!response.ok) throw new Error("Failed to fetch loans.");
+      const { data } = await response.json();
+      // Create a mapping: loanID -> currency
+      const loanMap = {};
+      data.forEach((loan) => {
+        loanMap[loan.loanID] = loan.currency || "USD"; // **Default to USD if currency is missing**
+      });
+      setLoans(loanMap);
+    } catch (error) {
+      console.error("Error fetching loans:", error);
+      setNotification({ type: "error", message: "Could not load loan data." });
+    }
   };
+
+  /**
+   * Fetch all payments from the server
+   */
+  const fetchPayments = async () => {
+    try {
+      const response = await fetch("http://13.246.7.5:5000/api/payments");
+      if (!response.ok) throw new Error("Failed to fetch payments.");
+      const { data } = await response.json();
+      setPayments(data || []);
+    } catch (error) {
+      console.error("Error fetching payments:", error);
+      setNotification({ type: "error", message: "Could not load payments." });
+    }
+  };
+
+  /**
+   * Initialize data on component mount and when refreshTrigger changes
+   */
+  useEffect(() => {
+    fetchLoans();
+    fetchPayments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]); // **Re-fetch when refreshTrigger changes**
 
   // Modal controls
   const openAddPaymentModal = () => {
@@ -37,7 +81,9 @@ const PaymentList = ({ payments, refreshPayments, clients = [] }) => {
     setNotification(null);
   };
 
-  // Add or Edit payment submission
+  /**
+   * Add or Edit payment submission
+   */
   const handleAddOrEditPaymentSubmit = async (paymentData) => {
     try {
       const url = isEditMode
@@ -62,7 +108,12 @@ const PaymentList = ({ payments, refreshPayments, clients = [] }) => {
           ? "Payment updated successfully!"
           : "Payment added successfully!",
       });
-      await refreshPayments();
+
+      // Refresh payments by leveraging the refreshTrigger in the parent
+      // This can be handled by the parent component incrementing the refreshTrigger
+      // For this, you might need to lift the refresh function up if necessary
+      // However, since refreshTrigger is a prop, the parent will handle re-fetching
+
       closeModal();
     } catch (error) {
       console.error("Error saving payment:", error);
@@ -70,50 +121,60 @@ const PaymentList = ({ payments, refreshPayments, clients = [] }) => {
     }
   };
 
-  // Delete payment
-// Delete payment
-const handleDeletePayment = async (paymentID) => {
-  if (!window.confirm("Are you sure you want to delete this payment?")) {
-    return;
-  }
-
-  try {
-    // Fetch the payment by paymentID to get its _id
-    const responseGet = await fetch(`http://13.246.7.5:5000/api/payments?paymentID=${paymentID}`);
-    if (!responseGet.ok) {
-      throw new Error("Failed to fetch payment details for deletion.");
+  /**
+   * Delete payment
+   */
+  const handleDeletePayment = async (paymentID) => {
+    if (!window.confirm("Are you sure you want to delete this payment?")) {
+      return;
     }
 
-    const { data: paymentData } = await responseGet.json();
-    if (!paymentData || paymentData.length === 0) {
-      throw new Error("Payment not found.");
+    try {
+      // Fetch the payment by paymentID to get its _id
+      const responseGet = await fetch(
+        `http://13.246.7.5:5000/api/payments?paymentID=${paymentID}`
+      );
+      if (!responseGet.ok) {
+        throw new Error("Failed to fetch payment details for deletion.");
+      }
+
+      const { data: paymentData } = await responseGet.json();
+      if (!paymentData || paymentData.length === 0) {
+        throw new Error("Payment not found.");
+      }
+
+      const paymentToDelete = paymentData[0]._id; // Use the actual MongoDB ObjectId
+
+      // Delete the payment using its _id
+      const responseDelete = await fetch(
+        `http://13.246.7.5:5000/api/payments/${paymentToDelete}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const result = await responseDelete.json();
+      if (!responseDelete.ok) {
+        throw new Error(result.message || "Error deleting payment.");
+      }
+
+      setNotification({
+        type: "success",
+        message: "Payment deleted successfully!",
+      });
+
+      // Refresh payments by leveraging the refreshTrigger in the parent
+      // Similar to handleAddOrEditPaymentSubmit, the parent will handle re-fetching
+
+    } catch (error) {
+      console.error("Error deleting payment:", error);
+      setNotification({ type: "error", message: error.message });
     }
+  };
 
-    const paymentToDelete = paymentData[0]._id; // Use the actual MongoDB ObjectId
-
-    // Delete the payment using its _id
-    const responseDelete = await fetch(`http://13.246.7.5:5000/api/payments/${paymentToDelete}`, {
-      method: "DELETE",
-    });
-
-    const result = await responseDelete.json();
-    if (!responseDelete.ok) {
-      throw new Error(result.message || "Error deleting payment.");
-    }
-
-    setNotification({
-      type: "success",
-      message: "Payment deleted successfully!",
-    });
-    await refreshPayments();
-  } catch (error) {
-    console.error("Error deleting payment:", error);
-    setNotification({ type: "error", message: error.message });
-  }
-};
-
-
-  // View payment details
+  /**
+   * View payment details
+   */
   const handleViewDetails = (payment) => {
     setSelectedPayment(payment);
   };
@@ -122,8 +183,41 @@ const handleDeletePayment = async (paymentID) => {
     setSelectedPayment(null);
   };
 
+  /**
+   * Helper function to map clientID to clientName
+   */
+  const getClientName = (clientID) => {
+    const client = clients.find((c) => c._id === clientID); // Use `_id` for matching
+    return client ? client.name : "Unknown Client";
+  };
+
+  /**
+   * Utility function for formatting currency using Intl.NumberFormat
+   */
+  const formatCurrencyAmount = (amount, currencyCode) => {
+    if (isNaN(amount)) return "0.00";
+
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: currencyCode,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount);
+    } catch (error) {
+      console.error(`Invalid currency code "${currencyCode}":`, error);
+      // Fallback to USD if currency code is invalid
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount);
+    }
+  };
+
   // Columns for the table
-  const columns = React.useMemo(
+  const columns = useMemo(
     () => [
       {
         Header: "Payment ID",
@@ -153,12 +247,18 @@ const handleDeletePayment = async (paymentID) => {
       {
         Header: "Amount",
         accessor: "amount",
-        Cell: ({ value }) => (value ? value.toLocaleString() : "0.00"),
+        Cell: ({ row }) => {
+          const currencyCode = loans[row.original.loanID] || "USD"; // **Use loan's currency**
+          return formatCurrencyAmount(row.original.amount, currencyCode);
+        },
       },
       {
         Header: "Outstanding Balance",
         accessor: "outstandingBalance",
-        Cell: ({ value }) => (value ? value.toLocaleString() : "0.00"),
+        Cell: ({ row }) => {
+          const currencyCode = loans[row.original.loanID] || "USD"; // **Use loan's currency**
+          return formatCurrencyAmount(row.original.outstandingBalance, currencyCode);
+        },
       },
       {
         Header: "Actions",
@@ -186,7 +286,7 @@ const handleDeletePayment = async (paymentID) => {
         ),
       },
     ],
-    [clients]
+    [clients, loans]
   );
 
   return (
@@ -205,12 +305,9 @@ const handleDeletePayment = async (paymentID) => {
         <Notification type={notification.type} message={notification.message} />
       )}
 
-      <GlobalDataTable
-        columns={columns}
-        data={payments || []}
-        title="Payments"
-      />
+      <GlobalDataTable columns={columns} data={payments || []} title="Payments" />
 
+      {/* Add/Edit Payment Modal */}
       {isModalOpen && (
         <Modal
           isOpen={isModalOpen}
@@ -231,6 +328,7 @@ const handleDeletePayment = async (paymentID) => {
         </Modal>
       )}
 
+      {/* View Payment Details Modal */}
       {selectedPayment && !isEditMode && (
         <Modal
           isOpen={!!selectedPayment}
@@ -242,6 +340,23 @@ const handleDeletePayment = async (paymentID) => {
       )}
     </div>
   );
+};
+
+// **PropTypes Validation**
+PaymentList.propTypes = {
+  clients: PropTypes.arrayOf(
+    PropTypes.shape({
+      _id: PropTypes.string.isRequired,
+      name: PropTypes.string.isRequired,
+      // Add other client properties if needed
+    })
+  ),
+  refreshTrigger: PropTypes.number, // **Used to trigger re-fetching**
+};
+
+PaymentList.defaultProps = {
+  clients: [],
+  refreshTrigger: 0,
 };
 
 export default PaymentList;

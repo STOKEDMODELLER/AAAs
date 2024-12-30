@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+// src/App.js
+
+import React, { useState, useEffect } from "react";
 import "./App.css"; // Import Tailwind CSS
 
 import ClientTable from "./components/ClientTable";
@@ -16,7 +18,18 @@ const App = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [paymentRefreshCount, setPaymentRefreshCount] = useState(0); // **Refresh Trigger Counter**
 
+  /**
+   * Function to trigger payments refresh
+   */
+  const triggerPaymentRefresh = () => {
+    setPaymentRefreshCount((prev) => prev + 1);
+  };
+
+  /**
+   * Fetch data utility function
+   */
   const fetchData = async (endpoint, setData, resourceName) => {
     try {
       const response = await fetch(endpoint);
@@ -29,8 +42,10 @@ const App = () => {
     }
   };
 
-  // Fetch Payments
-  const fetchPayments = async () => {
+  /**
+   * Fetch Payments
+   */
+  const fetchPaymentsData = async () => {
     try {
       const response = await fetch("http://13.246.7.5:5000/api/payments");
       if (!response.ok) {
@@ -44,19 +59,32 @@ const App = () => {
     }
   };
 
-  const fetchLoans = async () => {
+  /**
+   * Fetch Loans
+   */
+  const fetchLoansData = async () => {
     await fetchData("http://13.246.7.5:5000/api/loans", setLoans, "loans");
   };
 
+  /**
+   * Fetch Clients
+   */
+  const fetchClientsData = async () => {
+    await fetchData("http://13.246.7.5:5000/api/clients", setClients, "clients");
+  };
+
+  /**
+   * Initialize data on component mount and when paymentRefreshCount changes
+   */
   useEffect(() => {
     setLoading(true);
-  
+
     Promise.all([
-      fetchData("http://13.246.7.5:5000/api/clients", setClients, "clients"),
-      fetchLoans(),
-      fetchData("http://13.246.7.5:5000/api/payments", setPayments, "payments"),
+      fetchClientsData(),
+      fetchLoansData(),
+      fetchPaymentsData(),
     ]).finally(() => setLoading(false));
-  }, []);
+  }, [paymentRefreshCount]); // **Re-fetch when paymentRefreshCount changes**
 
   if (loading) {
     return (
@@ -104,20 +132,18 @@ const App = () => {
               <h2 className="text-2xl font-semibold text-gray-700 mb-4">Loans</h2>
               <LoanList
                 loans={loans}
-                onSelectLoan={(loan) => setSelectedClient(loan)}
-                fetchLoans={fetchLoans} // Pass the fetchLoans function
+                fetchLoans={fetchLoansData}
+                triggerPaymentRefresh={triggerPaymentRefresh} // **Pass the refresh trigger function**
               />
-
             </section>
 
             <section>
-
+              <h2 className="text-2xl font-semibold text-gray-700 mb-4">Payments</h2>
               <PaymentList
-                payments={payments}
-                refreshPayments={fetchPayments} // Pass the refresh function
-                clients={clients} // Pass client data for mapping
-              />            
-              </section>
+                clients={clients} // **Pass client data for mapping**
+                refreshTrigger={paymentRefreshCount} // **Pass the refresh trigger counter**
+              />
+            </section>
           </div>
 
           {/* Right Column: Report */}

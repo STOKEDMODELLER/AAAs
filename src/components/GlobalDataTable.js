@@ -1,3 +1,5 @@
+// src/components/GlobalDataTable.js
+
 import React from "react";
 import {
   useTable,
@@ -93,46 +95,64 @@ function GlobalDataTable({
           className="min-w-full bg-white border border-gray-300"
         >
           <thead>
-            {headerGroups.map((headerGroup) => (
-              <tr
-                {...headerGroup.getHeaderGroupProps()}
-                className="bg-gray-100"
-              >
-                {headerGroup.headers.map((column) => (
-                  <th
-                    {...column.getHeaderProps(
+            {headerGroups.map((headerGroup) => {
+              // Destructure 'key' from headerGroup props
+              const { key: headerGroupKey, ...headerGroupProps } = headerGroup.getHeaderGroupProps();
+              return (
+                <tr
+                  key={headerGroupKey} // Assign 'key' directly
+                  {...headerGroupProps}
+                  className="bg-gray-100"
+                >
+                  {headerGroup.headers.map((column) => {
+                    // Destructure 'key' from column props
+                    const { key: columnKey, ...columnProps } = column.getHeaderProps(
                       column.getSortByToggleProps?.()
-                    )}
-                    className="px-6 py-3 border-b-2 border-gray-300 text-left text-sm font-semibold text-gray-700 cursor-pointer"
-                  >
-                    {column.render("Header")}
-                    {column.isSorted
-                      ? column.isSortedDesc
-                        ? " ↓"
-                        : " ↑"
-                      : ""}
-                  </th>
-                ))}
-              </tr>
-            ))}
+                    );
+                    return (
+                      <th
+                        key={columnKey} // Assign 'key' directly
+                        {...columnProps}
+                        className="px-6 py-3 border-b-2 border-gray-300 text-left text-sm font-semibold text-gray-700 cursor-pointer"
+                      >
+                        {column.render("Header")}
+                        {column.isSorted
+                          ? column.isSortedDesc
+                            ? " ↓"
+                            : " ↑"
+                          : ""}
+                      </th>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </thead>
           <tbody {...getTableBodyProps()}>
             {page.length > 0 ? (
               page.map((row) => {
                 prepareRow(row);
+                // Destructure 'key' from row props
+                const { key: rowKey, ...rowProps } = row.getRowProps();
                 return (
                   <tr
-                    {...row.getRowProps()}
+                    key={rowKey} // Assign 'key' directly
+                    {...rowProps}
                     className="hover:bg-gray-50 border-b border-gray-200"
                   >
-                    {row.cells.map((cell) => (
-                      <td
-                        {...cell.getCellProps()}
-                        className="px-6 py-4 text-sm text-gray-700"
-                      >
-                        {cell.render("Cell")}
-                      </td>
-                    ))}
+                    {row.cells.map((cell) => {
+                      // Destructure 'key' from cell props
+                      const { key: cellKey, ...cellProps } = cell.getCellProps();
+                      return (
+                        <td
+                          key={cellKey} // Assign 'key' directly
+                          {...cellProps}
+                          className="px-6 py-4 text-sm text-gray-700"
+                        >
+                          {cell.render("Cell")}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })

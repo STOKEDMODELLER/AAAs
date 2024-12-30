@@ -1,6 +1,8 @@
-// ./components/LoanForm.js
+// src/components/LoanForm.js
+
 import React, { useState, useEffect } from "react";
-import CurrencyCodes from "currency-codes"; // **Importing the Currency Codes Library**
+import CurrencyCodes from "currency-codes"; // Importing the Currency Codes Library
+import PropTypes from "prop-types"; // For Prop Types Validation
 
 /**
  * LoanForm - A form component to add or edit a loan.
@@ -21,7 +23,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     termMonths: "",
     endDate: "",
     adminFee: "",
-    currency: "USD", // **Added Currency Field with Default Value**
+    currency: "USD", // Added Currency Field with Default Value
   });
   const [clients, setClients] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,13 +89,50 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
   };
 
   /**
-   * Calculate interest earned
+   * Calculate Monthly Payment using Standard Amortization Formula
    */
-  const calculateInterestEarned = () => {
+  const calculateMonthlyPayment = () => {
     const loanAmount = parseFloat(parseNumber(formData.loanAmount));
-    const interestRate = parseFloat(formData.interestRate);
-    if (isNaN(loanAmount) || isNaN(interestRate)) return null;
-    return (loanAmount * interestRate).toFixed(2);
+    const interestRate = parseFloat(formData.interestRate); // e.g., 0.05 for 5%
+    const termMonths = parseInt(formData.termMonths, 10);
+
+    if (
+      isNaN(loanAmount) ||
+      isNaN(interestRate) ||
+      isNaN(termMonths) ||
+      termMonths <= 0
+    )
+      return null;
+
+    const monthlyInterestRate = interestRate / 12; // e.g., 0.05 / 12 = 0.0041666667
+
+    const denominator = 1 - Math.pow(1 + monthlyInterestRate, -termMonths);
+    if (denominator === 0) return null; // Prevent division by zero
+
+    const monthlyPayment = (loanAmount * monthlyInterestRate) / denominator;
+    return parseFloat(monthlyPayment.toFixed(2));
+  };
+
+  /**
+   * Calculate Total Interest Earned using Standard Amortization
+   */
+  const calculateTotalInterestEarned = () => {
+    const monthlyPayment = calculateMonthlyPayment();
+    const termMonthsNum = parseInt(formData.termMonths, 10);
+    const loanAmount = parseFloat(parseNumber(formData.loanAmount));
+    const adminFeeAmount = parseFloat(calculateAdminFeeAmount());
+
+    if (
+      isNaN(monthlyPayment) ||
+      isNaN(termMonthsNum) ||
+      isNaN(loanAmount) ||
+      isNaN(adminFeeAmount)
+    )
+      return null;
+
+    const totalPayment = monthlyPayment * termMonthsNum;
+    const totalInterest = totalPayment - loanAmount;
+    return totalInterest.toFixed(2);
   };
 
   /**
@@ -101,31 +140,19 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
    */
   const calculateAdminFeeAmount = () => {
     const loanAmount = parseFloat(parseNumber(formData.loanAmount));
-    const adminFeePercentage = parseFloat(formData.adminFee);
+    const adminFeePercentage = parseFloat(formData.adminFee); // e.g., 0.05 for 5%
     if (isNaN(loanAmount) || isNaN(adminFeePercentage)) return null;
     return (loanAmount * adminFeePercentage).toFixed(2);
   };
 
   /**
-   * Calculate monthly required payment
+   * Calculate monthly required payment including admin fee
+   * Note: Admin fee is a one-time fee, not included in monthly payments
    */
   const calculateMonthlyAmount = () => {
-    const loanAmount = parseFloat(parseNumber(formData.loanAmount));
-    const interestEarned = parseFloat(calculateInterestEarned());
-    const adminFeeAmount = parseFloat(calculateAdminFeeAmount());
-    const termMonthsNum = parseInt(formData.termMonths, 10);
-
-    if (
-      isNaN(loanAmount) ||
-      isNaN(interestEarned) ||
-      isNaN(adminFeeAmount) ||
-      isNaN(termMonthsNum) ||
-      termMonthsNum === 0
-    )
-      return null;
-
-    const total = loanAmount + interestEarned + adminFeeAmount;
-    return (total / termMonthsNum).toFixed(2);
+    const monthlyPayment = calculateMonthlyPayment();
+    if (monthlyPayment === null) return null;
+    return monthlyPayment.toFixed(2);
   };
 
   /**
@@ -136,6 +163,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     if (!existingLoan) {
       setFormData((prev) => ({ ...prev, loanID: generateRandomLoanID() }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingLoan]);
 
   /**
@@ -153,9 +181,10 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
         termMonths: existingLoan.termMonths || "",
         endDate: existingLoan.endDate?.split("T")[0] || "",
         adminFee: formatNumber(existingLoan.adminFee),
-        currency: existingLoan.currency || "USD", // **Populate Currency Field if Exists**
+        currency: existingLoan.currency || "USD", // Populate Currency Field if Exists
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingLoan]);
 
   /**
@@ -204,7 +233,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
       !startDate ||
       !termMonths ||
       !adminFee ||
-      !currency // **Ensure Currency is Selected**
+      !currency // Ensure Currency is Selected
     ) {
       setNotification?.({
         type: "error",
@@ -222,7 +251,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
         loanAmount: parseFloat(parseNumber(formData.loanAmount)),
         interestRate: parseFloat(formData.interestRate),
         adminFee: parseFloat(parseNumber(formData.adminFee)),
-        currency, // **Include Currency in Submission Data**
+        currency, // Include Currency in Submission Data
       });
       onClose(); // Close modal only on successful submission
     } catch (err) {
@@ -244,7 +273,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
       adminFee &&
       startDate &&
       termMonths &&
-      currency // **Include Currency in Calculation Check**
+      currency // Include Currency in Calculation Check
     );
   };
 
@@ -444,23 +473,29 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
               {formData.termMonths} month{formData.termMonths > 1 ? "s" : ""}
             </p>
             <p>
-              <strong>Interest Earned:</strong>{" "}
-              {formatNumber(calculateInterestEarned())}
+              <strong>Interest Earned (Total):</strong>{" "}
+              {calculateTotalInterestEarned() !== null
+                ? `$${formatNumber(calculateTotalInterestEarned())}`
+                : "N/A"}
             </p>
             <p>
               <strong>Admin Fee (One-Time):</strong>{" "}
-              {formatNumber(calculateAdminFeeAmount())}
+              {calculateAdminFeeAmount() !== null
+                ? `$${formatNumber(calculateAdminFeeAmount())}`
+                : "N/A"}
             </p>
             <p>
               <strong>Monthly Required Amount:</strong>{" "}
-              {formatNumber(calculateMonthlyAmount())}
+              {calculateMonthlyAmount() !== null
+                ? `$${formatNumber(calculateMonthlyAmount())}`
+                : "N/A"}
             </p>
             <p>
               <strong>End Date:</strong> {formData.endDate || "N/A"}
             </p>
             <p>
               <strong>Currency:</strong> {formData.currency}
-            </p> {/* **Display Selected Currency** */}
+            </p> {/* Display Selected Currency */}
           </>
         )}
       </div>
@@ -486,5 +521,28 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     </form>
   );
 }
+
+// PropTypes Validation
+LoanForm.propTypes = {
+  existingLoan: PropTypes.shape({
+    loanID: PropTypes.string,
+    clientID: PropTypes.string,
+    loanAmount: PropTypes.number,
+    interestRate: PropTypes.number,
+    startDate: PropTypes.string,
+    termMonths: PropTypes.number,
+    endDate: PropTypes.string,
+    adminFee: PropTypes.number,
+    currency: PropTypes.string,
+  }),
+  onSubmit: PropTypes.func.isRequired,
+  onClose: PropTypes.func.isRequired,
+  setNotification: PropTypes.func,
+};
+
+LoanForm.defaultProps = {
+  existingLoan: null,
+  setNotification: null,
+};
 
 export default LoanForm;

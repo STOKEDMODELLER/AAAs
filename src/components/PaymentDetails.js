@@ -1,9 +1,30 @@
 // src/components/PaymentDetails.js
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { formatNumber } from "../utils/formatNumber";
+import CurrencyCodes from "currency-codes"; // **Importing the Currency Codes Library**
 
 const PaymentDetails = ({ payment, onClose }) => {
+  const [loanCurrency, setLoanCurrency] = useState("USD"); // **State to Store Loan's Currency**
+
+  useEffect(() => {
+    const fetchLoanCurrency = async () => {
+      try {
+        const response = await fetch(`http://13.246.7.5:5000/api/loans/loans_by_LID/${payment.loanID}`);
+        if (!response.ok) throw new Error("Failed to fetch loan details.");
+        const { data } = await response.json();
+        setLoanCurrency(data.currency || "USD");
+      } catch (error) {
+        console.error("Error fetching loan currency:", error);
+        setLoanCurrency("USD"); // **Fallback to USD if fetch fails**
+      }
+    };
+
+    if (payment.loanID) {
+      fetchLoanCurrency();
+    }
+  }, [payment.loanID]);
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md mx-auto">
       <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">Payment Details</h2>
@@ -34,19 +55,31 @@ const PaymentDetails = ({ payment, onClose }) => {
         </div>
         <div>
           <h4 className="text-md font-semibold text-gray-700">Amount:</h4>
-          <p className="text-gray-600">${formatNumber(payment.amount)}</p>
+          <p className="text-gray-600">
+            {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
+            {payment.amount ? formatNumber(payment.amount) : "0.00"}
+          </p>
         </div>
         <div>
           <h4 className="text-md font-semibold text-gray-700">Interest Earned:</h4>
-          <p className="text-gray-600">${payment.interestEarned ? formatNumber(payment.interestEarned) : "0.00"}</p>
+          <p className="text-gray-600">
+            {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
+            {payment.interestEarned ? formatNumber(payment.interestEarned) : "0.00"}
+          </p>
         </div>
         <div>
           <h4 className="text-md font-semibold text-gray-700">Admin Fee:</h4>
-          <p className="text-gray-600">${payment.adminFee ? formatNumber(payment.adminFee) : "0.00"}</p>
+          <p className="text-gray-600">
+            {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
+            {payment.adminFee ? formatNumber(payment.adminFee) : "0.00"}
+          </p>
         </div>
         <div>
           <h4 className="text-md font-semibold text-gray-700">Outstanding Balance:</h4>
-          <p className="text-gray-600">${formatNumber(payment.outstandingBalance)}</p>
+          <p className="text-gray-600">
+            {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
+            {payment.outstandingBalance ? formatNumber(payment.outstandingBalance) : "0.00"}
+          </p>
         </div>
         <div>
           <h4 className="text-md font-semibold text-gray-700">Description:</h4>

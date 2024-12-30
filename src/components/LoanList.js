@@ -1,4 +1,5 @@
-// ./components/LoanList.js
+// src/components/LoanList.js
+
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import GlobalDataTable from "./GlobalDataTable";
 import Notification from "./Notification";
@@ -6,8 +7,9 @@ import Modal from "./Modal";
 import LoanForm from "./LoanForm";
 import LoanView from "./LoanView";
 import getSymbolFromCurrency from "currency-symbol-map"; // **Importing the Currency Symbol Mapper**
+import PropTypes from "prop-types"; // **For Prop Types Validation**
 
-function LoanList({ loans, fetchLoans }) {
+function LoanList({ loans, fetchLoans, triggerPaymentRefresh }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [clients, setClients] = useState([]);
@@ -114,6 +116,7 @@ function LoanList({ loans, fetchLoans }) {
 
       setNotification({ type: "success", message: "Loan saved successfully!" });
       await fetchLoans(); // Refresh loans
+      await triggerPaymentRefresh(); // Trigger payments refresh in parent
       closeModal();
     } catch (err) {
       console.error("Error saving loan:", err.message);
@@ -140,6 +143,7 @@ function LoanList({ loans, fetchLoans }) {
 
       setNotification({ type: "success", message: "Loan deleted successfully!" });
       await fetchLoans(); // Refresh loans
+      await triggerPaymentRefresh(); // Trigger payments refresh in parent
       closeModal();
     } catch (err) {
       console.error(`Error deleting loan ${selectedLoan.loanID}:`, err.message);
@@ -194,7 +198,12 @@ function LoanList({ loans, fetchLoans }) {
       { 
         Header: "Admin Fee", 
         accessor: "adminFee", 
-        Cell: ({ row }) => formatCurrency(row.original.adminFee, row.original.currency) 
+        Cell: ({ row }) => {
+          const loanAmount = parseFloat(row.original.loanAmount) || 0;
+          const adminFeePercentage = parseFloat(row.original.adminFee) || 0;
+          const adminFeeAmount = loanAmount * adminFeePercentage;
+          return formatCurrency(adminFeeAmount, row.original.currency);
+        } 
       },
       {
         Header: "Actions",
@@ -324,5 +333,25 @@ function LoanList({ loans, fetchLoans }) {
     </div>
   );
 }
+
+// **PropTypes Validation**
+LoanList.propTypes = {
+  loans: PropTypes.arrayOf(
+    PropTypes.shape({
+      _id: PropTypes.string.isRequired,
+      loanID: PropTypes.string.isRequired,
+      clientID: PropTypes.string.isRequired,
+      loanAmount: PropTypes.number.isRequired,
+      interestRate: PropTypes.number.isRequired,
+      startDate: PropTypes.string.isRequired,
+      termMonths: PropTypes.number.isRequired,
+      endDate: PropTypes.string.isRequired,
+      adminFee: PropTypes.number.isRequired,
+      currency: PropTypes.string.isRequired,
+    })
+  ).isRequired,
+  fetchLoans: PropTypes.func.isRequired,
+  triggerPaymentRefresh: PropTypes.func.isRequired, // **Function to trigger payment refresh**
+};
 
 export default LoanList;
