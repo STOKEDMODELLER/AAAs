@@ -1,9 +1,11 @@
+// ./components/LoanList.js
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import GlobalDataTable from "./GlobalDataTable";
 import Notification from "./Notification";
 import Modal from "./Modal";
 import LoanForm from "./LoanForm";
 import LoanView from "./LoanView";
+import getSymbolFromCurrency from "currency-symbol-map"; // **Importing the Currency Symbol Mapper**
 
 function LoanList({ loans, fetchLoans }) {
   const [loading, setLoading] = useState(false);
@@ -48,21 +50,37 @@ function LoanList({ loans, fetchLoans }) {
     }
   };
 
+  // Fetch all payments
+  const fetchAllPayments = async () => {
+    try {
+      const response = await fetch("http://13.246.7.5:5000/api/payments");
+      if (!response.ok) throw new Error(`Failed to fetch payments: ${response.status}`);
+      const { data } = await response.json();
+      return data || [];
+    } catch (err) {
+      console.error("Error fetching payments:", err.message);
+      return [];
+    }
+  };
+
+  // Filter payments for the selected loan
+  const filterPaymentsByLoan = (allPayments, loanID) => {
+    return allPayments.filter((payment) => payment.loanID === loanID);
+  };
+
   // Open modal with specified mode and loan
-// Open modal with specified mode and loan
-const openModal = async (mode, loan = null) => {
-  setModalMode(mode);
-  setSelectedLoan(loan);
-  setNotification(null);
+  const openModal = async (mode, loan = null) => {
+    setModalMode(mode);
+    setSelectedLoan(loan);
+    setNotification(null);
 
-  if (mode === "delete" && loan) {
-    const allPayments = await fetchAllPayments(); // Fetch all payments
-    const relatedPayments = filterPaymentsByLoan(allPayments, loan.loanID); // Filter payments for the selected loan
-    setPayments(relatedPayments); // Set related payments for statistics
-  }
-  setIsModalOpen(true);
-};
-
+    if (mode === "delete" && loan) {
+      const allPayments = await fetchAllPayments(); // Fetch all payments
+      const relatedPayments = filterPaymentsByLoan(allPayments, loan.loanID); // Filter payments for the selected loan
+      setPayments(relatedPayments); // Set related payments for statistics
+    }
+    setIsModalOpen(true);
+  };
 
   // Close modal
   const closeModal = () => {
@@ -131,38 +149,38 @@ const openModal = async (mode, loan = null) => {
     }
   };
 
-  // Map client names to loans
+  // Map client names to loans and ensure each loan has a valid currency
   const loansWithClientNames = useMemo(() => {
     return loans.map((loan) => {
       const client = clients.find((c) => c._id === loan.clientID);
-      return { ...loan, clientName: client ? client.name : "Unknown Client" };
+      return { 
+        ...loan, 
+        clientName: client ? client.name : "Unknown Client",
+        currency: loan.currency || "USD", // **Ensure currency is set, default to 'USD'**
+      };
     });
   }, [loans, clients]);
-// Fetch all payments
-const fetchAllPayments = async () => {
-  try {
-    const response = await fetch("http://13.246.7.5:5000/api/payments");
-    if (!response.ok) throw new Error(`Failed to fetch payments: ${response.status}`);
-    const { data } = await response.json();
-    return data || [];
-  } catch (err) {
-    console.error("Error fetching payments:", err.message);
-    return [];
-  }
-};
-
-// Filter payments for the selected loan
-const filterPaymentsByLoan = (allPayments, loanID) => {
-  return allPayments.filter((payment) => payment.loanID === loanID);
-};
 
   // Table columns
   const columns = useMemo(
     () => [
       { Header: "Loan ID", accessor: "loanID" },
       { Header: "Client", accessor: "clientName" },
-      { Header: "Amount", accessor: "loanAmount" },
-      { Header: "Interest", accessor: "interestRate", Cell: ({ value }) => `${(value * 100).toFixed(2)}%` },
+      { 
+        Header: "Currency", 
+        accessor: "currency", 
+        Cell: ({ value }) => value || "USD" // **Display 'USD' if currency is missing**
+      },
+      { 
+        Header: "Amount", 
+        accessor: "loanAmount", 
+        Cell: ({ row }) => formatCurrency(row.original.loanAmount, row.original.currency) 
+      },
+      { 
+        Header: "Interest", 
+        accessor: "interestRate", 
+        Cell: ({ value }) => `${(value * 100).toFixed(2)}%` 
+      },
       {
         Header: "Total Amount",
         accessor: "totalAmount",
@@ -170,10 +188,14 @@ const filterPaymentsByLoan = (allPayments, loanID) => {
           const loanAmount = parseFloat(row.original.loanAmount || 0);
           const interestRate = parseFloat(row.original.interestRate || 0);
           const totalAmount = loanAmount + loanAmount * interestRate;
-          return `$${totalAmount.toFixed(2)}`;
+          return formatCurrency(totalAmount, row.original.currency);
         },
       },
-      { Header: "Admin Fee", accessor: "adminFee", Cell: ({ value }) => `${(value * 100).toFixed(2)}%` },
+      { 
+        Header: "Admin Fee", 
+        accessor: "adminFee", 
+        Cell: ({ row }) => formatCurrency(row.original.adminFee, row.original.currency) 
+      },
       {
         Header: "Actions",
         Cell: ({ row }) => {
@@ -205,6 +227,27 @@ const filterPaymentsByLoan = (allPayments, loanID) => {
     ],
     [openModal]
   );
+
+  /**
+   * Helper function to format currency based on code
+   */
+  const formatCurrency = (amount, currencyCode) => {
+    // Check if the currency code is valid
+    const isValidCurrency = getSymbolFromCurrency(currencyCode) !== undefined;
+
+    // Fallback to 'USD' if the currency code is invalid or missing
+    const validCurrency = isValidCurrency ? currencyCode : 'USD';
+
+    // Use Intl.NumberFormat for locale-aware formatting
+    const formatter = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: validCurrency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    return formatter.format(amount);
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-4">
@@ -243,10 +286,11 @@ const filterPaymentsByLoan = (allPayments, loanID) => {
             : `View Loan: ${selectedLoan?.loanID || ""}`
         }
         description={
-          modalMode === "delete"
-            ? `This loan has ${payments.length} associated payments totaling $${payments
-                .reduce((sum, p) => sum + p.amount, 0)
-                .toFixed(2)}. Deleting this loan will permanently remove all associated data.`
+          modalMode === "delete" && selectedLoan
+            ? `This loan has ${payments.length} associated payments totaling ${formatCurrency(
+                payments.reduce((sum, p) => sum + p.amount, 0),
+                selectedLoan.currency || "USD" // **Fallback to 'USD' if currency is missing**
+              )}. Deleting this loan will permanently remove all associated data.`
             : ""
         }
         notification={notification}
@@ -260,7 +304,7 @@ const filterPaymentsByLoan = (allPayments, loanID) => {
           />
         ) : modalMode === "view" ? (
           <LoanView loan={selectedLoan} />
-        ) : modalMode === "delete" && (
+        ) : modalMode === "delete" && selectedLoan && (
           <div className="flex justify-end gap-2">
             <button
               onClick={closeModal}

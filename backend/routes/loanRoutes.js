@@ -3,6 +3,53 @@ const PaymentTracking = require("../models/PaymentTracking");
 const Loan = require("../models/Loan");
 const router = express.Router();
 
+const CurrencyCodes = require("currency-codes"); // **Importing the Currency Codes Library**
+
+
+// Create a new loan
+router.post("/", async (req, res, next) => {
+  try {
+    const { loanAmount, adminFee, currency } = req.body;
+
+    // Validate currency
+    if (!CurrencyCodes.code(currency)) {
+      return res.status(400).json({ success: false, message: "Invalid currency code." });
+    }
+
+    req.body.outstandingBalance = loanAmount + (adminFee || 0);
+    const newLoan = new Loan({
+      ...req.body,
+      currency, // **Include Currency Field**
+    });
+    await newLoan.save();
+    return res.status(201).json({ success: true, message: "Loan created successfully.", data: newLoan });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Update a loan
+router.put("/:id", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const existingLoan = await Loan.findById(id);
+    if (!existingLoan) {
+      return res.status(404).json({ success: false, message: "Loan not found." });
+    }
+
+    // If currency is being updated, validate it
+    if (req.body.currency && !CurrencyCodes.code(req.body.currency)) {
+      return res.status(400).json({ success: false, message: "Invalid currency code." });
+    }
+
+    Object.assign(existingLoan, req.body);
+    await existingLoan.save();
+    return res.status(200).json({ success: true, message: "Loan updated successfully.", data: existingLoan });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get all loans
 router.get("/", async (req, res, next) => {
   try {
@@ -27,34 +74,7 @@ router.get("/loans_by_LID/:loanID", async (req, res, next) => {
   }
 });
 
-// Create a new loan
-router.post("/", async (req, res, next) => {
-  try {
-    const { loanAmount, adminFee } = req.body;
-    req.body.outstandingBalance = loanAmount + (adminFee || 0);
-    const newLoan = new Loan(req.body);
-    await newLoan.save();
-    return res.status(201).json({ success: true, message: "Loan created successfully.", data: newLoan });
-  } catch (error) {
-    next(error);
-  }
-});
 
-// Update a loan
-router.put("/:id", async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const existingLoan = await Loan.findById(id);
-    if (!existingLoan) {
-      return res.status(404).json({ success: false, message: "Loan not found." });
-    }
-    Object.assign(existingLoan, req.body);
-    await existingLoan.save();
-    return res.status(200).json({ success: true, message: "Loan updated successfully.", data: existingLoan });
-  } catch (error) {
-    next(error);
-  }
-});
 
 router.delete("/:id", async (req, res, next) => {
   try {

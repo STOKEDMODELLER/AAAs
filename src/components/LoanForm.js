@@ -1,5 +1,6 @@
 // ./components/LoanForm.js
 import React, { useState, useEffect } from "react";
+import CurrencyCodes from "currency-codes"; // **Importing the Currency Codes Library**
 
 /**
  * LoanForm - A form component to add or edit a loan.
@@ -20,6 +21,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
     termMonths: "",
     endDate: "",
     adminFee: "",
+    currency: "USD", // **Added Currency Field with Default Value**
   });
   const [clients, setClients] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -141,6 +143,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
    */
   useEffect(() => {
     if (existingLoan) {
+      console.log("Existing Loan Currency:", existingLoan.currency); // Debugging Line
       setFormData({
         loanID: existingLoan.loanID || "",
         clientID: existingLoan.clientID || "",
@@ -150,6 +153,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
         termMonths: existingLoan.termMonths || "",
         endDate: existingLoan.endDate?.split("T")[0] || "",
         adminFee: formatNumber(existingLoan.adminFee),
+        currency: existingLoan.currency || "USD", // **Populate Currency Field if Exists**
       });
     }
   }, [existingLoan]);
@@ -175,6 +179,10 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
 
       setFormData((prev) => ({ ...prev, endDate: newEndDate }));
     }
+    // Handle currency field
+    else if (name === "currency") {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
     // Handle other fields
     else {
       setFormData((prev) => ({ ...prev, [name]: value }));
@@ -186,7 +194,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const { clientID, loanAmount, interestRate, startDate, termMonths, adminFee } =
+    const { clientID, loanAmount, interestRate, startDate, termMonths, adminFee, currency } =
       formData;
 
     if (
@@ -195,7 +203,8 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
       !interestRate ||
       !startDate ||
       !termMonths ||
-      !adminFee
+      !adminFee ||
+      !currency // **Ensure Currency is Selected**
     ) {
       setNotification?.({
         type: "error",
@@ -213,6 +222,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
         loanAmount: parseFloat(parseNumber(formData.loanAmount)),
         interestRate: parseFloat(formData.interestRate),
         adminFee: parseFloat(parseNumber(formData.adminFee)),
+        currency, // **Include Currency in Submission Data**
       });
       onClose(); // Close modal only on successful submission
     } catch (err) {
@@ -227,18 +237,30 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
    * Determine if loan summary can be calculated
    */
   const canCalculate = () => {
-    const { loanAmount, interestRate, adminFee, startDate, termMonths } = formData;
+    const { loanAmount, interestRate, adminFee, startDate, termMonths, currency } = formData;
     return (
       loanAmount &&
       interestRate &&
       adminFee &&
       startDate &&
-      termMonths
+      termMonths &&
+      currency // **Include Currency in Calculation Check**
     );
   };
 
+  /**
+   * Fetch list of currencies using currency-codes
+   */
+  const getCurrencyOptions = () => {
+    const codes = CurrencyCodes.codes(); // Get array of currency codes
+    return codes.map((code) => ({
+      code: code,
+      name: `${code} - ${CurrencyCodes.code(code)?.currency || "Unknown Currency"}`,
+    }));
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6 p-6 bg-white rounded-lg shadow-md">
       {/* Loan ID - always non-editable */}
       <div>
         <label htmlFor="loanID" className="block text-gray-700 font-medium">
@@ -264,7 +286,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
           name="clientID"
           value={formData.clientID}
           onChange={handleChange}
-          className="w-full p-2 rounded-md bg-gray-100 border border-gray-300 focus:ring-2 focus:ring-blue-500"
+          className="w-full p-2 rounded-md bg-white border border-gray-300 focus:ring-2 focus:ring-blue-500"
           required
         >
           <option value="">-- Select a Client --</option>
@@ -291,6 +313,28 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
           className="w-full p-2 rounded-md bg-white border border-gray-300 focus:ring-2 focus:ring-blue-500"
           required
         />
+      </div>
+
+      {/* Currency Dropdown */}
+      <div>
+        <label htmlFor="currency" className="block text-gray-700 font-medium">
+          Currency:
+        </label>
+        <select
+          id="currency"
+          name="currency"
+          value={formData.currency}
+          onChange={handleChange}
+          className="w-full p-2 rounded-md bg-white border border-gray-300 focus:ring-2 focus:ring-blue-500"
+          required
+        >
+          <option value="">-- Select Currency --</option>
+          {getCurrencyOptions().map((currency) => (
+            <option key={currency.code} value={currency.code}>
+              {currency.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Interest Rate */}
@@ -414,6 +458,9 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
             <p>
               <strong>End Date:</strong> {formData.endDate || "N/A"}
             </p>
+            <p>
+              <strong>Currency:</strong> {formData.currency}
+            </p> {/* **Display Selected Currency** */}
           </>
         )}
       </div>
