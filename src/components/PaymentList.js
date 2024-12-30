@@ -1,5 +1,3 @@
-// src/components/PaymentList.js
-
 import React, { useState, useEffect, useMemo } from "react";
 import GlobalDataTable from "./GlobalDataTable";
 import Modal from "./Modal";
@@ -25,10 +23,9 @@ const PaymentList = ({ clients = [], refreshTrigger }) => {
       const response = await fetch("http://13.246.7.5:5000/api/loans");
       if (!response.ok) throw new Error("Failed to fetch loans.");
       const { data } = await response.json();
-      // Create a mapping: loanID -> currency
       const loanMap = {};
       data.forEach((loan) => {
-        loanMap[loan.loanID] = loan.currency || "USD"; // **Default to USD if currency is missing**
+        loanMap[loan.loanID] = loan.currency || "USD";
       });
       setLoans(loanMap);
     } catch (error) {
@@ -59,7 +56,7 @@ const PaymentList = ({ clients = [], refreshTrigger }) => {
     fetchLoans();
     fetchPayments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshTrigger]); // **Re-fetch when refreshTrigger changes**
+  }, [refreshTrigger]);
 
   // Modal controls
   const openAddPaymentModal = () => {
@@ -109,10 +106,8 @@ const PaymentList = ({ clients = [], refreshTrigger }) => {
           : "Payment added successfully!",
       });
 
-      // Refresh payments by leveraging the refreshTrigger in the parent
-      // This can be handled by the parent component incrementing the refreshTrigger
-      // For this, you might need to lift the refresh function up if necessary
-      // However, since refreshTrigger is a prop, the parent will handle re-fetching
+      // Refresh payments
+      fetchPayments();
 
       closeModal();
     } catch (error) {
@@ -130,27 +125,23 @@ const PaymentList = ({ clients = [], refreshTrigger }) => {
     }
 
     try {
-      // Fetch the payment by paymentID to get its _id
-      const responseGet = await fetch(
+      const response = await fetch(
         `http://13.246.7.5:5000/api/payments?paymentID=${paymentID}`
       );
-      if (!responseGet.ok) {
+      if (!response.ok) {
         throw new Error("Failed to fetch payment details for deletion.");
       }
 
-      const { data: paymentData } = await responseGet.json();
+      const { data: paymentData } = await response.json();
       if (!paymentData || paymentData.length === 0) {
         throw new Error("Payment not found.");
       }
 
-      const paymentToDelete = paymentData[0]._id; // Use the actual MongoDB ObjectId
+      const paymentToDelete = paymentData[0]._id;
 
-      // Delete the payment using its _id
       const responseDelete = await fetch(
         `http://13.246.7.5:5000/api/payments/${paymentToDelete}`,
-        {
-          method: "DELETE",
-        }
+        { method: "DELETE" }
       );
 
       const result = await responseDelete.json();
@@ -163,9 +154,8 @@ const PaymentList = ({ clients = [], refreshTrigger }) => {
         message: "Payment deleted successfully!",
       });
 
-      // Refresh payments by leveraging the refreshTrigger in the parent
-      // Similar to handleAddOrEditPaymentSubmit, the parent will handle re-fetching
-
+      // Refresh payments
+      fetchPayments();
     } catch (error) {
       console.error("Error deleting payment:", error);
       setNotification({ type: "error", message: error.message });
@@ -187,7 +177,7 @@ const PaymentList = ({ clients = [], refreshTrigger }) => {
    * Helper function to map clientID to clientName
    */
   const getClientName = (clientID) => {
-    const client = clients.find((c) => c._id === clientID); // Use `_id` for matching
+    const client = clients.find((c) => c._id === clientID);
     return client ? client.name : "Unknown Client";
   };
 
@@ -206,7 +196,6 @@ const PaymentList = ({ clients = [], refreshTrigger }) => {
       }).format(amount);
     } catch (error) {
       console.error(`Invalid currency code "${currencyCode}":`, error);
-      // Fallback to USD if currency code is invalid
       return new Intl.NumberFormat(undefined, {
         style: "currency",
         currency: "USD",
@@ -248,7 +237,7 @@ const PaymentList = ({ clients = [], refreshTrigger }) => {
         Header: "Amount",
         accessor: "amount",
         Cell: ({ row }) => {
-          const currencyCode = loans[row.original.loanID] || "USD"; // **Use loan's currency**
+          const currencyCode = loans[row.original.loanID] || "USD";
           return formatCurrencyAmount(row.original.amount, currencyCode);
         },
       },
@@ -256,7 +245,7 @@ const PaymentList = ({ clients = [], refreshTrigger }) => {
         Header: "Outstanding Balance",
         accessor: "outstandingBalance",
         Cell: ({ row }) => {
-          const currencyCode = loans[row.original.loanID] || "USD"; // **Use loan's currency**
+          const currencyCode = loans[row.original.loanID] || "USD";
           return formatCurrencyAmount(row.original.outstandingBalance, currencyCode);
         },
       },
@@ -342,16 +331,15 @@ const PaymentList = ({ clients = [], refreshTrigger }) => {
   );
 };
 
-// **PropTypes Validation**
+// PropTypes Validation
 PaymentList.propTypes = {
   clients: PropTypes.arrayOf(
     PropTypes.shape({
       _id: PropTypes.string.isRequired,
       name: PropTypes.string.isRequired,
-      // Add other client properties if needed
     })
   ),
-  refreshTrigger: PropTypes.number, // **Used to trigger re-fetching**
+  refreshTrigger: PropTypes.number,
 };
 
 PaymentList.defaultProps = {

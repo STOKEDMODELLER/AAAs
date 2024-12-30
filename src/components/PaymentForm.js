@@ -144,69 +144,115 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
       console.error("Loan object is undefined");
       return;
     }
-
-    const terms = [];
-    const loanAmount = parseFloat(loan.loanAmount || 0); // Default to 0 if undefined
-    const termMonths = parseInt(loan.termMonths || 12, 10); // Default to 12 months if undefined
-    const interestRate = parseFloat(loan.interestRate || 0); // Annual interest rate (e.g., 17.93 for 17.93%)
-    const adminFeeRate = parseFloat(loan.adminFee || 0); // One-time admin fee rate
-    const monthlyInterestRate = (interestRate / 100) / 12; // Correct conversion from APR to monthly rate
-
-    const totalAdminFee = loanAmount * adminFeeRate; // Total admin fee (one-time)
-    const principalPerTerm = loanAmount / termMonths; // Principal for each term
-
+  
+    const { loanAmount, termMonths = 12, interestRate, adminFee, startDate } = loan;
+  
+    // Validate termMonths to avoid division by zero
+    if (termMonths <= 0) {
+      console.error("Term months must be greater than 0");
+      return;
+    }
+  
+    // Convert interest rate to monthly interest rate
+    const monthlyInterestRate = interestRate / 12;
+  
+    // Calculate fixed monthly payment using the amortisation formula
+    const fixedMonthlyPayment =
+      (loanAmount * monthlyInterestRate) /
+      (1 - Math.pow(1 + monthlyInterestRate, -termMonths));
+    const roundedFixedMonthlyPayment = parseFloat(fixedMonthlyPayment.toFixed(2));
+  
+    // Calculate total admin fee (one-time fee applied only to the first term)
+    const totalAdminFee = parseFloat((loanAmount * adminFee).toFixed(2));
+  
     let balance = loanAmount;
-    let cumulativeInterest = 0; // To track total interest earned
-
-    // Initialize scheduledDate to 30 days after loan start date
-    let scheduledDate = new Date(loan.startDate);
-    scheduledDate.setDate(scheduledDate.getDate() + 30);
-
+    const terms = [];
+  
+    // Validate and initialise startDate
+    const initialStartDate = startDate ? new Date(startDate) : new Date();
+    if (isNaN(initialStartDate.getTime())) {
+      console.error("Invalid startDate provided in loan object");
+      return;
+    }
+  
+    // Adjust Term 1 schedule date
+    const firstPaymentDate = new Date(initialStartDate);
+    firstPaymentDate.setDate(30); // Set to 30th of the month
+  
+    if (firstPaymentDate <= initialStartDate) {
+      // If setting to the 30th doesn't push it to the next month, add 1 month
+      firstPaymentDate.setMonth(firstPaymentDate.getMonth() + 1);
+    }
+  
+    let scheduledDate = new Date(firstPaymentDate);
+  
     for (let term = 1; term <= termMonths; term++) {
-      const interest = parseFloat((balance * monthlyInterestRate).toFixed(2)); // Calculate monthly interest
-      cumulativeInterest += interest;
-
-      const adminFee = term === 1 ? parseFloat(totalAdminFee.toFixed(2)) : 0; // Apply admin fee only in the first term
-      const expectedAmount = parseFloat((principalPerTerm + interest).toFixed(2)); // Principal + Interest
-      const total = parseFloat((expectedAmount + adminFee).toFixed(2)); // Expected Amount + Admin Fee
-
+      const interestPayment = parseFloat((balance * monthlyInterestRate).toFixed(2));
+      const principalPayment = parseFloat((roundedFixedMonthlyPayment - interestPayment).toFixed(2));
+  
+      // Adjust the last payment to account for rounding errors
+      const finalPrincipalPayment =
+        term === termMonths ? parseFloat(balance.toFixed(2)) : principalPayment;
+      const finalTotalPayment =
+        term === termMonths
+          ? parseFloat((finalPrincipalPayment + interestPayment).toFixed(2))
+          : roundedFixedMonthlyPayment;
+  
+      const endingBalance =
+        term === termMonths ? 0 : parseFloat((balance - finalPrincipalPayment).toFixed(2));
+  
+      // Apply admin fee only for the first term
+      const adminFeeForTerm = term === 1 ? totalAdminFee : 0;
+      const totalPayment = parseFloat((finalTotalPayment + adminFeeForTerm).toFixed(2));
+  
       terms.push({
         term,
-        scheduledDate: new Date(scheduledDate), // Clone the date
-        principal: parseFloat(principalPerTerm.toFixed(2)),
-        interest,
-        adminFee,
-        expectedAmount,
-        total,
+        paymentDate: scheduledDate.toISOString(), // Format as ISO string
+        paymentAmount: totalPayment,
+        principal: term === termMonths ? finalPrincipalPayment : principalPayment,
+        interest: interestPayment,
+        adminFee: adminFeeForTerm,
+        remainingBalance: endingBalance,
+        beginningBalance: balance,
       });
-
-      balance -= principalPerTerm; // Reduce balance by the principal amount
-
-      // Set scheduledDate for next term by adding 1 month
+  
+      balance = endingBalance;
+  
+      // Increment the scheduled date by one month for the next term
       scheduledDate.setMonth(scheduledDate.getMonth() + 1);
+  
+      // Ensure scheduled date aligns with the 30th of the month
+      scheduledDate.setDate(30);
     }
-
+  
     setAllTermDetails(terms); // Update state with calculated terms
   };
+  
+  
+  
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
+  
     setFormData((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: "" })); // Clear error on field change
-
+  
     if (name === "paymentTerm" && loanDetails) {
       const termDetails = allTermDetails.find((t) => t.term === parseInt(value, 10));
+  
       if (termDetails) {
         setFormData((prev) => ({
           ...prev,
-          scheduledDate: termDetails.scheduledDate.toISOString().split("T")[0],
+          scheduledDate: termDetails.paymentDate
+            ? termDetails.paymentDate.split("T")[0] // Extract only the date part
+            : "", // Fallback to empty string if paymentDate is not valid
         }));
-        setExpectedAmount(termDetails.expectedAmount);
-        setInterestForTerm(termDetails.interest);
-        setAdminFeeForTerm(termDetails.adminFee);
-        setTotalExpectedForTerm(termDetails.total);
+        setExpectedAmount(termDetails.paymentAmount || 0);
+        setInterestForTerm(termDetails.interest || 0);
+        setAdminFeeForTerm(termDetails.adminFee || 0);
+        setTotalExpectedForTerm(termDetails.paymentAmount || 0);
       } else {
+        setFormData((prev) => ({ ...prev, scheduledDate: "" })); // Reset scheduledDate
         setExpectedAmount(0);
         setInterestForTerm(0);
         setAdminFeeForTerm(0);
@@ -214,6 +260,8 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
       }
     }
   };
+  
+  
 
   const validateFields = () => {
     const newErrors = {};
@@ -392,9 +440,9 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
             </div>
             <div className="mt-2 space-y-2">
               <p className="text-gray-600">
-                <strong>Expected Amount (Principal + Interest):</strong>{" "}
+                <strong>Principal Amount:</strong>{" "}
                 {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
-                {expectedAmount.toFixed(2)}
+                {expectedAmount.toFixed(2)-interestForTerm.toFixed(2)-adminFeeForTerm.toFixed(2)}
               </p>
               <p className="text-gray-600">
                 <strong>Interest for Term:</strong>{" "}
@@ -409,15 +457,10 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
               <p className="text-gray-600">
                 <strong>Total Expected for Term:</strong>{" "}
                 {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
-                {totalExpectedForTerm.toFixed(2)}
+                {expectedAmount.toFixed(2)}
               </p>
               <p className="text-gray-600">
                 <strong>Currency:</strong> {loanCurrency}
-              </p>
-              <p className="text-gray-600">
-                <strong>Interest Earned (Cumulative):</strong>{" "}
-                {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
-                {allTermDetails.reduce((acc, term) => acc + term.interest, 0).toFixed(2)}
               </p>
             </div>
 
@@ -470,50 +513,6 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
               />
             </div>
             {errors.amount && <p className="text-red-500 text-sm">{errors.amount}</p>}
-          </div>
-
-          {/* Outstanding Balance */}
-          <div>
-            <label htmlFor="outstandingBalance" className="block text-gray-700 font-medium mb-1">
-              Outstanding Balance:
-            </label>
-            <div className="flex items-center">
-              <span className="mr-2">
-                {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
-              </span>
-              <input
-                type="number"
-                id="outstandingBalance"
-                name="outstandingBalance"
-                value={formData.outstandingBalance}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border rounded-md bg-gray-100 cursor-not-allowed"
-                disabled
-                placeholder="Auto-calculated"
-              />
-            </div>
-          </div>
-
-          {/* Interest Earned */}
-          <div>
-            <label htmlFor="interestEarned" className="block text-gray-700 font-medium mb-1">
-              Interest Earned:
-            </label>
-            <div className="flex items-center">
-              <span className="mr-2">
-                {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
-              </span>
-              <input
-                type="number"
-                id="interestEarned"
-                name="interestEarned"
-                value={formData.interestEarned}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border rounded-md bg-gray-100 cursor-not-allowed"
-                disabled
-                placeholder="Auto-calculated"
-              />
-            </div>
           </div>
 
           {/* Description */}
