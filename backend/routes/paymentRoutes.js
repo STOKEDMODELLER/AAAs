@@ -98,19 +98,32 @@ router.put("/:id", async (req, res, next) => {
 router.delete("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const loan = await Loan.findById(id);
-    if (!loan) {
-      return res.status(404).json({ success: false, message: "Loan not found." });
+
+    // Find the payment
+    const payment = await PaymentTracking.findById(id);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: "Payment not found." });
     }
 
-    await PaymentTracking.deleteMany({ loanID: loan.loanID });
-    await loan.deleteOne();
+    // Find the associated loan
+    const loan = await Loan.findOne({ loanID: payment.loanID });
+    if (!loan) {
+      return res.status(404).json({ success: false, message: "Associated loan not found." });
+    }
 
-    return res.status(200).json({ success: true, message: "Loan and associated payments deleted successfully." });
+    // Update the loan's outstanding balance
+    loan.outstandingBalance += payment.amount;
+    await loan.save();
+
+    // Delete the payment
+    await payment.deleteOne();
+
+    return res.status(200).json({ success: true, message: "Payment deleted successfully." });
   } catch (error) {
     next(error);
   }
 });
+
 
 
 // Get payment by paymentID
