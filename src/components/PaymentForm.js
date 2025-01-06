@@ -1,13 +1,18 @@
 // src/components/PaymentForm.js
 
 import React, { useState, useEffect } from "react";
-import CurrencyCodes from "currency-codes"; // **Importing the Currency Codes Library**
+import CurrencyCodes from "currency-codes"; // Importing the Currency Codes Library
 
 const generatePaymentID = () => {
   const randomDigits = Math.floor(100000 + Math.random() * 900000);
   return `PMT-${randomDigits}`;
 };
 
+/**
+ * PaymentForm - A form component to record and manage loan payments.
+ * This version uses simple interest logic and sets the first scheduled date (Term 1)
+ * to 30 days after the loan's start date, rather than matching the loan start date itself.
+ */
 const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) => {
   const [formData, setFormData] = useState({
     paymentID: "",
@@ -20,31 +25,36 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
     outstandingBalance: "",
     interestEarned: "",
     description: "",
-    currency: "USD", // **Added Currency Field with Default Value**
+    currency: "USD", // Default Currency
   });
   const [clients, setClients] = useState([]);
   const [loans, setLoans] = useState([]);
   const [loanDetails, setLoanDetails] = useState(null);
-  const [loanCurrency, setLoanCurrency] = useState("USD"); // **State to Store Loan's Currency**
+  const [loanCurrency, setLoanCurrency] = useState("USD");
   const [paymentTerms, setPaymentTerms] = useState([]);
-  const [allTermDetails, setAllTermDetails] = useState([]); // Store all terms
-  const [expectedAmount, setExpectedAmount] = useState(0);
-  const [interestForTerm, setInterestForTerm] = useState(0);
-  const [adminFeeForTerm, setAdminFeeForTerm] = useState(0); // **Admin Fee for Term**
-  const [totalExpectedForTerm, setTotalExpectedForTerm] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
-  const [isCalculationDetailsOpen, setIsCalculationDetailsOpen] = useState(false); // State for collapsible section
+  const [isCalculationDetailsOpen, setIsCalculationDetailsOpen] = useState(false);
+
+  // Simple interest breakdown for each term
+  const [simpleMonthlyPayment, setSimpleMonthlyPayment] = useState(0);
+  const [simpleMonthlyPrincipal, setSimpleMonthlyPrincipal] = useState(0);
+  const [simpleMonthlyInterest, setSimpleMonthlyInterest] = useState(0);
+  const [adminFeeForTerm, setAdminFeeForTerm] = useState(0);
+  const [totalExpectedForTerm, setTotalExpectedForTerm] = useState(0);
 
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const response = await fetch(`http://13.246.7.5:5000/api/clients`);
+        const response = await fetch("http://13.246.7.5:5000/api/clients");
         if (!response.ok) throw new Error("Failed to fetch clients.");
         const { data } = await response.json();
         setClients(data);
       } catch (error) {
-        setNotification?.({ type: "error", message: "Could not load clients." });
+        setNotification?.({
+          type: "error",
+          message: "Could not load clients.",
+        });
       }
     };
 
@@ -54,6 +64,7 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
       const newPaymentID = generatePaymentID();
       setFormData((prev) => ({ ...prev, paymentID: newPaymentID }));
     } else {
+      // Populate form data if editing an existing payment
       setFormData({
         paymentID: existingPayment.paymentID || "",
         clientID: existingPayment.clientID || "",
@@ -69,30 +80,40 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
           ? existingPayment.interestEarned.toFixed(2)
           : "",
         description: existingPayment.description || "",
-        currency: existingPayment.currency || "USD", // **Populate Currency Field if Exists**
+        currency: existingPayment.currency || "USD",
       });
-      setLoanCurrency(existingPayment.currency || "USD"); // **Set Loan Currency for Existing Payment**
+      setLoanCurrency(existingPayment.currency || "USD");
     }
   }, [existingPayment, setNotification]);
 
+  /**
+   * Fetch loans for the selected client.
+   */
   useEffect(() => {
     const fetchLoans = async () => {
       if (!formData.clientID) return;
 
       try {
-        const response = await fetch(`http://13.246.7.5:5000/api/loans`);
+        const response = await fetch("http://13.246.7.5:5000/api/loans");
         if (!response.ok) throw new Error("Failed to fetch loans.");
         const { data } = await response.json();
         const filteredLoans = data.filter((loan) => loan.clientID === formData.clientID);
         setLoans(filteredLoans);
       } catch (error) {
-        setNotification?.({ type: "error", message: "Could not load loans for the selected client." });
+        setNotification?.({
+          type: "error",
+          message: "Could not load loans for the selected client.",
+        });
       }
     };
 
     fetchLoans();
   }, [formData.clientID, setNotification]);
 
+  /**
+   * Fetch loan details for the selected loanID.
+   * Prepare term options and compute simple interest schedule.
+   */
   useEffect(() => {
     const fetchLoanDetails = async () => {
       if (!formData.loanID) {
@@ -101,34 +122,36 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
           ...prev,
           outstandingBalance: "",
           interestEarned: "",
-          currency: "USD", // **Reset Currency to Default if No Loan Selected**
+          currency: "USD",
         }));
-        setLoanCurrency("USD"); // **Reset Loan Currency**
-        setAllTermDetails([]); // **Reset Term Details**
+        setLoanCurrency("USD");
         setPaymentTerms([]);
-        setExpectedAmount(0);
-        setInterestForTerm(0);
-        setAdminFeeForTerm(0);
-        setTotalExpectedForTerm(0);
         return;
       }
 
       try {
-        const response = await fetch(`http://13.246.7.5:5000/api/loans/loans_by_LID/${formData.loanID}`);
+        const response = await fetch(
+          `http://13.246.7.5:5000/api/loans/loans_by_LID/${formData.loanID}`
+        );
         if (!response.ok) throw new Error("Failed to fetch loan details.");
         const { data } = await response.json();
         setLoanDetails(data);
-        setLoanCurrency(data.currency || "USD"); // **Set Loan Currency from Loan Details**
+        setLoanCurrency(data.currency || "USD");
 
+        // Prepare term dropdown
         const terms = Array.from({ length: data.termMonths }, (_, i) => ({
           label: `Term ${i + 1}`,
           value: i + 1,
         }));
         setPaymentTerms(terms);
 
-        calculateAllTermDetails(data);
+        // Calculate simple interest details
+        calculateSimpleInterestSchedule(data);
       } catch (error) {
-        setNotification?.({ type: "error", message: "Could not load loan details." });
+        setNotification?.({
+          type: "error",
+          message: "Could not load loan details.",
+        });
       }
     };
 
@@ -136,133 +159,76 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
   }, [formData.loanID, setNotification]);
 
   /**
-   * Calculate all term details with corrected logic:
-   * - Admin Fee is applied only in the first term
+   * Using simple interest for the entire loan:
+   * totalInterest = P × r × (termMonths / 12)
+   * monthlyPayment = (P + totalInterest) / termMonths
+   * monthlyPrincipal = P / termMonths
+   * monthlyInterest = totalInterest / termMonths
+   *
+   * We store these base amounts for display; the PaymentForm can decide
+   * how to handle admin fees or schedule details for each term.
    */
-  const calculateAllTermDetails = (loan) => {
-    if (!loan) {
-      console.error("Loan object is undefined");
-      return;
-    }
-  
-    const { loanAmount, termMonths = 12, interestRate, adminFee, startDate } = loan;
-  
-    // Validate termMonths to avoid division by zero
-    if (termMonths <= 0) {
-      console.error("Term months must be greater than 0");
-      return;
-    }
-  
-    // Convert interest rate to monthly interest rate
-    const monthlyInterestRate = interestRate / 12;
-  
-    // Calculate fixed monthly payment using the amortisation formula
-    const fixedMonthlyPayment =
-      (loanAmount * monthlyInterestRate) /
-      (1 - Math.pow(1 + monthlyInterestRate, -termMonths));
-    const roundedFixedMonthlyPayment = parseFloat(fixedMonthlyPayment.toFixed(2));
-  
-    // Calculate total admin fee (one-time fee applied only to the first term)
-    const totalAdminFee = parseFloat((loanAmount * adminFee).toFixed(2));
-  
-    let balance = loanAmount;
-    const terms = [];
-  
-    // Validate and initialise startDate
-    const initialStartDate = startDate ? new Date(startDate) : new Date();
-    if (isNaN(initialStartDate.getTime())) {
-      console.error("Invalid startDate provided in loan object");
-      return;
-    }
-  
-    // Adjust Term 1 schedule date
-    const firstPaymentDate = new Date(initialStartDate);
-    firstPaymentDate.setDate(30); // Set to 30th of the month
-  
-    if (firstPaymentDate <= initialStartDate) {
-      // If setting to the 30th doesn't push it to the next month, add 1 month
-      firstPaymentDate.setMonth(firstPaymentDate.getMonth() + 1);
-    }
-  
-    let scheduledDate = new Date(firstPaymentDate);
-  
-    for (let term = 1; term <= termMonths; term++) {
-      const interestPayment = parseFloat((balance * monthlyInterestRate).toFixed(2));
-      const principalPayment = parseFloat((roundedFixedMonthlyPayment - interestPayment).toFixed(2));
-  
-      // Adjust the last payment to account for rounding errors
-      const finalPrincipalPayment =
-        term === termMonths ? parseFloat(balance.toFixed(2)) : principalPayment;
-      const finalTotalPayment =
-        term === termMonths
-          ? parseFloat((finalPrincipalPayment + interestPayment).toFixed(2))
-          : roundedFixedMonthlyPayment;
-  
-      const endingBalance =
-        term === termMonths ? 0 : parseFloat((balance - finalPrincipalPayment).toFixed(2));
-  
-      // Apply admin fee only for the first term
-      const adminFeeForTerm = term === 1 ? totalAdminFee : 0;
-      const totalPayment = parseFloat((finalTotalPayment + adminFeeForTerm).toFixed(2));
-  
-      terms.push({
-        term,
-        paymentDate: scheduledDate.toISOString(), // Format as ISO string
-        paymentAmount: totalPayment,
-        principal: term === termMonths ? finalPrincipalPayment : principalPayment,
-        interest: interestPayment,
-        adminFee: adminFeeForTerm,
-        remainingBalance: endingBalance,
-        beginningBalance: balance,
-      });
-  
-      balance = endingBalance;
-  
-      // Increment the scheduled date by one month for the next term
-      scheduledDate.setMonth(scheduledDate.getMonth() + 1);
-  
-      // Ensure scheduled date aligns with the 30th of the month
-      scheduledDate.setDate(30);
-    }
-  
-    setAllTermDetails(terms); // Update state with calculated terms
-  };
-  
-  
-  
+  const calculateSimpleInterestSchedule = (loan) => {
+    if (!loan) return;
 
+    const { loanAmount, interestRate, termMonths = 12, adminFee } = loan;
+    if (termMonths <= 0) return;
+
+    const totalSimpleInterest = loanAmount * interestRate * (termMonths / 12);
+    const monthlyPayment = (loanAmount + totalSimpleInterest) / termMonths;
+    const monthlyPrincipal = loanAmount / termMonths;
+    const monthlyInterest = totalSimpleInterest / termMonths;
+
+    setSimpleMonthlyPayment(monthlyPayment);
+    setSimpleMonthlyPrincipal(monthlyPrincipal);
+    setSimpleMonthlyInterest(monthlyInterest);
+
+    // Admin fee is a one-time fee, typically applied in the first term
+    const adminFeeAmount = loanAmount * adminFee;
+    setAdminFeeForTerm(adminFeeAmount);
+  };
+
+  /**
+   * Whenever the user changes form fields, handle special cases:
+   * - paymentTerm: compute scheduled date and expected amounts
+   */
   const handleChange = (e) => {
     const { name, value } = e.target;
-  
     setFormData((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: "" })); // Clear error on field change
-  
-    if (name === "paymentTerm" && loanDetails) {
-      const termDetails = allTermDetails.find((t) => t.term === parseInt(value, 10));
-  
-      if (termDetails) {
-        setFormData((prev) => ({
-          ...prev,
-          scheduledDate: termDetails.paymentDate
-            ? termDetails.paymentDate.split("T")[0] // Extract only the date part
-            : "", // Fallback to empty string if paymentDate is not valid
-        }));
-        setExpectedAmount(termDetails.paymentAmount || 0);
-        setInterestForTerm(termDetails.interest || 0);
-        setAdminFeeForTerm(termDetails.adminFee || 0);
-        setTotalExpectedForTerm(termDetails.paymentAmount || 0);
+    setErrors((prev) => ({ ...prev, [name]: "" })); // clear error on field change
+
+    if (name === "paymentTerm") {
+      const termNumber = parseInt(value, 10);
+
+      if (loanDetails && termNumber > 0 && termNumber <= loanDetails.termMonths) {
+        // 1) Compute a new scheduledDate based on the loan's start date plus (termNumber × 30) days
+        if (loanDetails.startDate) {
+          const startDate = new Date(loanDetails.startDate);
+          // Add (termNumber × 30) days
+          const scheduledDate = new Date(startDate.getTime());
+          scheduledDate.setDate(scheduledDate.getDate() + 30 * termNumber);
+
+          setFormData((prev) => ({
+            ...prev,
+            scheduledDate: scheduledDate.toISOString().split("T")[0],
+          }));
+        }
+
+        // 2) If it is the first term, we add the admin fee onto the monthly payment
+        const isFirstTerm = termNumber === 1;
+        const currentTermPayment = simpleMonthlyPayment + (isFirstTerm ? adminFeeForTerm : 0);
+        setTotalExpectedForTerm(currentTermPayment);
       } else {
-        setFormData((prev) => ({ ...prev, scheduledDate: "" })); // Reset scheduledDate
-        setExpectedAmount(0);
-        setInterestForTerm(0);
-        setAdminFeeForTerm(0);
+        // Reset if invalid term
+        setFormData((prev) => ({ ...prev, scheduledDate: "" }));
         setTotalExpectedForTerm(0);
       }
     }
   };
-  
-  
 
+  /**
+   * Validate required fields before submitting.
+   */
   const validateFields = () => {
     const newErrors = {};
     if (!formData.clientID) newErrors.clientID = "Client is required.";
@@ -275,6 +241,9 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
     return Object.keys(newErrors).length === 0;
   };
 
+  /**
+   * Submit payment data to the parent or server.
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -290,7 +259,7 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
         amount: parseFloat(formData.amount),
         outstandingBalance: parseFloat(formData.outstandingBalance || 0),
         interestEarned: parseFloat(formData.interestEarned || 0),
-        currency: loanCurrency, // **Include Currency in Submission Data**
+        currency: loanCurrency,
       };
 
       await onSubmit(submissionData);
@@ -310,7 +279,8 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
         <div className="mb-4">
           <h2 className="text-2xl font-semibold text-gray-800">Manage Loan Payment</h2>
           <p className="text-gray-600 mt-2">
-            Use this form to record and manage loan payments. Select the client and their respective loan, choose the payment term, and enter the payment details. Ensure all information is accurate before submitting.
+            This form uses simple interest and sets Term 1's scheduled date to 30 days after
+            the loan's start date, rather than on the start date itself.
           </p>
         </div>
 
@@ -440,24 +410,24 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
             </div>
             <div className="mt-2 space-y-2">
               <p className="text-gray-600">
-                <strong>Principal Amount:</strong>{" "}
+                <strong>Principal per Term:</strong>{" "}
                 {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
-                {expectedAmount.toFixed(2)-interestForTerm.toFixed(2)-adminFeeForTerm.toFixed(2)}
+                {simpleMonthlyPrincipal.toFixed(2)}
               </p>
               <p className="text-gray-600">
-                <strong>Interest for Term:</strong>{" "}
+                <strong>Interest per Term (Simple Interest):</strong>{" "}
                 {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
-                {interestForTerm.toFixed(2)}
+                {simpleMonthlyInterest.toFixed(2)}
               </p>
               <p className="text-gray-600">
-                <strong>Admin Fee for Term:</strong>{" "}
+                <strong>Admin Fee (if applied in 1st Term):</strong>{" "}
                 {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
                 {adminFeeForTerm.toFixed(2)}
               </p>
               <p className="text-gray-600">
-                <strong>Total Expected for Term:</strong>{" "}
+                <strong>Expected for this Term:</strong>{" "}
                 {CurrencyCodes.code(loanCurrency)?.symbol || "$"}
-                {expectedAmount.toFixed(2)}
+                {totalExpectedForTerm.toFixed(2)}
               </p>
               <p className="text-gray-600">
                 <strong>Currency:</strong> {loanCurrency}
@@ -467,22 +437,21 @@ const PaymentForm = ({ existingPayment, onSubmit, onClose, setNotification }) =>
             {/* Collapsible Calculation Details */}
             {isCalculationDetailsOpen && (
               <div className="mt-4 p-4 bg-white border border-gray-300 rounded-md shadow-inner">
-                <h4 className="text-md font-semibold text-gray-700 mb-2">Calculation Details</h4>
+                <h4 className="text-md font-semibold text-gray-700 mb-2">
+                  Calculation Details
+                </h4>
                 <ul className="list-disc list-inside text-gray-600 space-y-1">
                   <li>
-                    <strong>Principal per Term:</strong> The total loan amount is divided equally across all terms.
+                    <strong>Simple Interest:</strong> Total = Principal × Annual Rate × (Months/12).
                   </li>
                   <li>
-                    <strong>Interest per Term:</strong> Calculated based on the outstanding balance and the monthly interest rate.
+                    <strong>Monthly Payment:</strong> (Principal + Total Interest) / termMonths.
                   </li>
                   <li>
-                    <strong>Admin Fee:</strong> A one-time administrative fee applied only in the first term.
+                    <strong>Scheduled Date (Term 1):</strong> 30 days after the loan's start date.
                   </li>
                   <li>
-                    <strong>Total Expected:</strong> The sum of expected amount and admin fee for the term.
-                  </li>
-                  <li>
-                    <strong>Scheduled Date:</strong> The date when the payment is due, starting 30 days after the loan start date and recurring monthly.
+                    <strong>Admin Fee:</strong> A one-time fee often added to the first term.
                   </li>
                 </ul>
               </div>

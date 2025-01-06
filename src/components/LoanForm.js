@@ -5,7 +5,7 @@ import CurrencyCodes from "currency-codes"; // Importing the Currency Codes Libr
 import PropTypes from "prop-types"; // For Prop Types Validation
 
 /**
- * LoanForm - A form component to add or edit a loan.
+ * LoanForm - A form component to add or edit a loan, using simple interest calculations.
  *
  * Props:
  * - existingLoan: (optional) The loan object if editing an existing loan.
@@ -29,7 +29,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   /**
-   * Helper to format numbers with commas
+   * Helper to format numbers with commas.
    */
   const formatNumber = (value) => {
     if (!value) return "";
@@ -39,12 +39,12 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
   };
 
   /**
-   * Helper to parse formatted numbers back to plain numbers
+   * Helper to parse formatted numbers back to plain numbers.
    */
   const parseNumber = (value) => value.replace(/,/g, "");
 
   /**
-   * Generates a random Loan ID
+   * Generates a random Loan ID.
    */
   const generateRandomLoanID = () => {
     const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -56,7 +56,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
   };
 
   /**
-   * Fetch clients from the server
+   * Fetch clients from the server.
    */
   const fetchClients = async () => {
     try {
@@ -73,7 +73,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
   };
 
   /**
-   * Calculate End Date based on Start Date and Term Months
+   * Calculate End Date based on Start Date and Term Months.
    */
   const calculateEndDate = (start, term) => {
     if (!start || !term) return "";
@@ -89,9 +89,10 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
   };
 
   /**
-   * Calculate Monthly Payment using Standard Amortization Formula
+   * Calculate the total interest using simple interest:
+   * totalInterest = principal * annualRate * (termMonths / 12).
    */
-  const calculateMonthlyPayment = () => {
+  const calculateTotalInterestEarned = () => {
     const loanAmount = parseFloat(parseNumber(formData.loanAmount));
     const interestRate = parseFloat(formData.interestRate); // e.g., 0.05 for 5%
     const termMonths = parseInt(formData.termMonths, 10);
@@ -101,53 +102,49 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
       isNaN(interestRate) ||
       isNaN(termMonths) ||
       termMonths <= 0
-    )
+    ) {
       return null;
+    }
 
-    const monthlyInterestRate = interestRate / 12; // e.g., 0.05 / 12 = 0.0041666667
-
-    const denominator = 1 - Math.pow(1 + monthlyInterestRate, -termMonths);
-    if (denominator === 0) return null; // Prevent division by zero
-
-    const monthlyPayment = (loanAmount * monthlyInterestRate) / denominator;
-    return parseFloat(monthlyPayment.toFixed(2));
-  };
-
-  /**
-   * Calculate Total Interest Earned using Standard Amortization
-   */
-  const calculateTotalInterestEarned = () => {
-    const monthlyPayment = calculateMonthlyPayment();
-    const termMonthsNum = parseInt(formData.termMonths, 10);
-    const loanAmount = parseFloat(parseNumber(formData.loanAmount));
-    const adminFeeAmount = parseFloat(calculateAdminFeeAmount());
-
-    if (
-      isNaN(monthlyPayment) ||
-      isNaN(termMonthsNum) ||
-      isNaN(loanAmount) ||
-      isNaN(adminFeeAmount)
-    )
-      return null;
-
-    const totalPayment = monthlyPayment * termMonthsNum;
-    const totalInterest = totalPayment - loanAmount;
+    const totalInterest = loanAmount * interestRate * (termMonths / 12);
     return totalInterest.toFixed(2);
   };
 
   /**
-   * Calculate admin fee amount
+   * Calculate the monthly required payment, using simple interest.
+   * monthlyPayment = (principal + totalInterest) / termMonths
+   */
+  const calculateMonthlyPayment = () => {
+    const loanAmount = parseFloat(parseNumber(formData.loanAmount));
+    const totalInterest = parseFloat(calculateTotalInterestEarned());
+    const termMonths = parseInt(formData.termMonths, 10);
+
+    if (
+      isNaN(loanAmount) ||
+      isNaN(totalInterest) ||
+      isNaN(termMonths) ||
+      termMonths <= 0
+    ) {
+      return null;
+    }
+
+    const monthlyPayment = (loanAmount + totalInterest) / termMonths;
+    return parseFloat(monthlyPayment.toFixed(2));
+  };
+
+  /**
+   * Calculate the total interest-based fee from adminFee
+   * e.g., 0.05 => 5% of the principal.
    */
   const calculateAdminFeeAmount = () => {
     const loanAmount = parseFloat(parseNumber(formData.loanAmount));
-    const adminFeePercentage = parseFloat(formData.adminFee); // e.g., 0.05 for 5%
+    const adminFeePercentage = parseFloat(formData.adminFee);
     if (isNaN(loanAmount) || isNaN(adminFeePercentage)) return null;
     return (loanAmount * adminFeePercentage).toFixed(2);
   };
 
   /**
-   * Calculate monthly required payment including admin fee
-   * Note: Admin fee is a one-time fee, not included in monthly payments
+   * Admin fee is a one-time fee, not included in monthly payments.
    */
   const calculateMonthlyAmount = () => {
     const monthlyPayment = calculateMonthlyPayment();
@@ -156,7 +153,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
   };
 
   /**
-   * Initialize form data on component mount or when editing an existing loan
+   * Initialise form data on component mount or when editing an existing loan.
    */
   useEffect(() => {
     fetchClients();
@@ -167,11 +164,10 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
   }, [existingLoan]);
 
   /**
-   * Populate form data when editing an existing loan
+   * Populate form data when editing an existing loan.
    */
   useEffect(() => {
     if (existingLoan) {
-      console.log("Existing Loan Currency:", existingLoan.currency); // Debugging Line
       setFormData({
         loanID: existingLoan.loanID || "",
         clientID: existingLoan.clientID || "",
@@ -181,14 +177,14 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
         termMonths: existingLoan.termMonths || "",
         endDate: existingLoan.endDate?.split("T")[0] || "",
         adminFee: formatNumber(existingLoan.adminFee),
-        currency: existingLoan.currency || "USD", // Populate Currency Field if Exists
+        currency: existingLoan.currency || "USD",
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingLoan]);
 
   /**
-   * Handle input changes
+   * Handle input changes.
    */
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -219,12 +215,19 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
   };
 
   /**
-   * Handle form submission
+   * Handle form submission.
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const { clientID, loanAmount, interestRate, startDate, termMonths, adminFee, currency } =
-      formData;
+    const {
+      clientID,
+      loanAmount,
+      interestRate,
+      startDate,
+      termMonths,
+      adminFee,
+      currency,
+    } = formData;
 
     if (
       !clientID ||
@@ -233,7 +236,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
       !startDate ||
       !termMonths ||
       !adminFee ||
-      !currency // Ensure Currency is Selected
+      !currency
     ) {
       setNotification?.({
         type: "error",
@@ -251,7 +254,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
         loanAmount: parseFloat(parseNumber(formData.loanAmount)),
         interestRate: parseFloat(formData.interestRate),
         adminFee: parseFloat(parseNumber(formData.adminFee)),
-        currency, // Include Currency in Submission Data
+        currency,
       });
       onClose(); // Close modal only on successful submission
     } catch (err) {
@@ -263,7 +266,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
   };
 
   /**
-   * Determine if loan summary can be calculated
+   * Determine if loan summary can be calculated.
    */
   const canCalculate = () => {
     const { loanAmount, interestRate, adminFee, startDate, termMonths, currency } = formData;
@@ -273,12 +276,12 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
       adminFee &&
       startDate &&
       termMonths &&
-      currency // Include Currency in Calculation Check
+      currency
     );
   };
 
   /**
-   * Fetch list of currencies using currency-codes
+   * Fetch list of currencies using currency-codes.
    */
   const getCurrencyOptions = () => {
     const codes = CurrencyCodes.codes(); // Get array of currency codes
@@ -473,7 +476,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
               {formData.termMonths} month{formData.termMonths > 1 ? "s" : ""}
             </p>
             <p>
-              <strong>Interest Earned (Total):</strong>{" "}
+              <strong>Total Interest (Simple Interest):</strong>{" "}
               {calculateTotalInterestEarned() !== null
                 ? `$${formatNumber(calculateTotalInterestEarned())}`
                 : "N/A"}
@@ -495,7 +498,7 @@ function LoanForm({ existingLoan, onSubmit, onClose, setNotification }) {
             </p>
             <p>
               <strong>Currency:</strong> {formData.currency}
-            </p> {/* Display Selected Currency */}
+            </p>
           </>
         )}
       </div>

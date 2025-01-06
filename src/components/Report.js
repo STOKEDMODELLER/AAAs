@@ -1,3 +1,5 @@
+// src/components/Report.js
+
 import React, { useEffect, useState } from "react";
 
 const Report = ({
@@ -10,47 +12,73 @@ const Report = ({
   setSelectedLoan,
 }) => {
   const [sortedPayments, setSortedPayments] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: "paymentDate", direction: "descending" });
+  const [sortConfig, setSortConfig] = useState({
+    key: "paymentDate",
+    direction: "descending",
+  });
 
   /**
-   * Calculate Projected Payments using standard amortization
+   * Calculate Projected Payments using Simple Interest:
+   * totalInterest = P × r × (termMonths / 12)
+   * monthlyPayment = (P + totalInterest) / termMonths
+   * monthlyPrincipal = P / termMonths
+   * monthlyInterest = totalInterest / termMonths
+   *
+   * Also incorporate the admin fee (loanAmount * adminFeePercentage) in the first term.
    */
   const calculateProjectedPayments = () => {
     if (!selectedLoan) return [];
-    const { interestRate, loanAmount, termMonths = 12 } = selectedLoan;
 
-    const monthlyInterestRate = interestRate / 12; // Convert annual rate to monthly rate
+    const {
+      interestRate,  // e.g. 0.05 => 5%
+      loanAmount,
+      termMonths = 12,
+      adminFee: adminFeePercentage, // e.g. 0.05 => 5%
+    } = selectedLoan;
+
     if (termMonths <= 0) return [];
 
-    const fixedMonthlyPayment =
-      (loanAmount * monthlyInterestRate) /
-      (1 - Math.pow(1 + monthlyInterestRate, -termMonths));
+    // Simple interest calculations
+    const totalInterest = loanAmount * interestRate * (termMonths / 12);
+    const monthlyInterest = totalInterest / termMonths;
+    const monthlyPrincipal = loanAmount / termMonths;
+    const monthlyPayment = monthlyPrincipal + monthlyInterest;
 
-    const roundedFixedMonthlyPayment = parseFloat(fixedMonthlyPayment.toFixed(2));
+    // Admin fee as a one-time fee on the first term
+    const oneTimeAdminFee = loanAmount * (adminFeePercentage || 0);
 
     let balance = loanAmount;
     const projectedPayments = [];
 
     for (let term = 1; term <= termMonths; term++) {
-      const interestPayment = parseFloat((balance * monthlyInterestRate).toFixed(2));
-      const principalPayment = parseFloat((roundedFixedMonthlyPayment - interestPayment).toFixed(2));
-
-      const finalPrincipalPayment =
-        term === termMonths ? parseFloat(balance.toFixed(2)) : principalPayment;
-      const finalTotalPayment =
+      // Interest and principal for this term
+      const interestThisTerm = monthlyInterest;
+      const principalThisTerm =
         term === termMonths
-          ? parseFloat((finalPrincipalPayment + interestPayment).toFixed(2))
-          : roundedFixedMonthlyPayment;
+          ? balance // final term clears out the remaining principal
+          : monthlyPrincipal;
 
+      // Admin fee applies only in the first term
+      const adminFeeThisTerm = term === 1 ? oneTimeAdminFee : 0;
+
+      // Payment amount = monthlyPayment + admin fee for the first term
+      const paymentAmount = monthlyPayment + adminFeeThisTerm;
+
+      // For demonstration, let's assume each payment is 1 month apart from "now."
+      const paymentDate = new Date();
+      paymentDate.setMonth(paymentDate.getMonth() + term);
+
+      // Remaining balance after paying principal
       const endingBalance =
-        term === termMonths ? 0 : parseFloat((balance - finalPrincipalPayment).toFixed(2));
+        term === termMonths ? 0 : balance - principalThisTerm;
 
       projectedPayments.push({
         term,
-        paymentDate: new Date(new Date().setMonth(new Date().getMonth() + term)),
-        paymentAmount: term === termMonths ? finalTotalPayment : roundedFixedMonthlyPayment,
-        principal: term === termMonths ? finalPrincipalPayment : principalPayment,
-        interest: interestPayment,
+        paymentDate,
+        paymentAmount,
+        principal: principalThisTerm,
+        interest: interestThisTerm,
+        adminFee: adminFeeThisTerm,
         remainingBalance: endingBalance,
         beginningBalance: balance,
       });
@@ -63,6 +91,9 @@ const Report = ({
 
   const projectedPayments = calculateProjectedPayments();
 
+  /**
+   * Sort payments made (already-logged payments) according to the sort config.
+   */
   useEffect(() => {
     if (!sortConfig) return;
     const { key, direction } = sortConfig;
@@ -75,6 +106,9 @@ const Report = ({
     );
   }, [payments, sortConfig]);
 
+  /**
+   * Print functionality
+   */
   const handlePrint = () => {
     const printContent = document.getElementById("printable-report");
     const originalContent = document.body.innerHTML;
@@ -85,31 +119,71 @@ const Report = ({
     window.location.reload();
   };
 
+  /**
+   * Sorting helper
+   */
   const requestSort = (key) => {
     setSortConfig((prevConfig) => ({
       key,
-      direction: prevConfig.key === key && prevConfig.direction === "ascending" ? "descending" : "ascending",
+      direction:
+        prevConfig.key === key && prevConfig.direction === "ascending"
+          ? "descending"
+          : "ascending",
     }));
   };
 
-  const filteredLoans = loans.filter((loan) => loan.clientID === selectedClient?._id);
+  /**
+   * Filter loans for the currently selected client
+   */
+  const filteredLoans = loans.filter(
+    (loan) => loan.clientID === selectedClient?._id
+  );
 
-  const totalPaymentsAmount = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-  const totalProjectedPayment = projectedPayments.reduce((sum, payment) => sum + (payment.paymentAmount || 0), 0);
-  const totalProjectedPrincipal = projectedPayments.reduce((sum, payment) => sum + (payment.principal || 0), 0);
-  const totalProjectedInterest = projectedPayments.reduce((sum, payment) => sum + (payment.interest || 0), 0);
+  // Summations for the Totals row in the Projected Payment Schedule
+  const totalPayment = projectedPayments.reduce(
+    (sum, p) => sum + p.paymentAmount,
+    0
+  );
+  const totalPrincipal = projectedPayments.reduce(
+    (sum, p) => sum + p.principal,
+    0
+  );
+  const totalInterest = projectedPayments.reduce(
+    (sum, p) => sum + p.interest,
+    0
+  );
+  const totalAdminFee = projectedPayments.reduce(
+    (sum, p) => sum + p.adminFee,
+    0
+  );
 
   return (
     <div className="p-8 bg-gray-100 min-h-screen">
       <div id="printable-report" className="bg-white p-8 rounded-lg shadow-lg space-y-8">
-        <h2 className="text-3xl font-bold text-gray-800">Comprehensive Loan Report</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-3xl font-bold text-gray-800">
+            Comprehensive Loan Report
+          </h2>
+          <button
+            onClick={handlePrint}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-200"
+          >
+            Print
+          </button>
+        </div>
         <p className="text-gray-600">
-          Select a client and their loan to view detailed payment histories, projected payments, and analysis.
+          Select a client and their loan to view detailed payment histories,
+          projected payments (simple interest), and analysis. The first term
+          includes a one-time admin fee if applicable.
         </p>
 
+        {/* Client & Loan Selection */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
-            <label htmlFor="client-select" className="block text-lg font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="client-select"
+              className="block text-lg font-medium text-gray-700 mb-2"
+            >
               Choose Client
             </label>
             <select
@@ -131,7 +205,10 @@ const Report = ({
             </select>
           </div>
           <div>
-            <label htmlFor="loan-select" className="block text-lg font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="loan-select"
+              className="block text-lg font-medium text-gray-700 mb-2"
+            >
               Choose Loan
             </label>
             <select
@@ -154,103 +231,217 @@ const Report = ({
           </div>
         </div>
 
+        {/* Display Client & Loan Details */}
         {selectedClient && selectedLoan && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Client Details */}
               <div className="bg-gray-50 p-6 rounded-lg shadow">
-                <h3 className="text-xl font-semibold text-gray-800">Client Details</h3>
-                <p><strong>Name:</strong> {selectedClient.name}</p>
-                <p><strong>Email:</strong> {selectedClient.email}</p>
-                <p><strong>Contact Number:</strong> {selectedClient.contactNumber || "N/A"}</p>
-                <p><strong>Address:</strong> {selectedClient.address || "N/A"}</p>
+                <h3 className="text-xl font-semibold text-gray-800">
+                  Client Details
+                </h3>
+                <p>
+                  <strong>Name:</strong> {selectedClient.name}
+                </p>
+                <p>
+                  <strong>Email:</strong> {selectedClient.email}
+                </p>
+                <p>
+                  <strong>Contact Number:</strong>{" "}
+                  {selectedClient.contactNumber || "N/A"}
+                </p>
+                <p>
+                  <strong>Address:</strong> {selectedClient.address || "N/A"}
+                </p>
               </div>
 
+              {/* Loan Details */}
               <div className="bg-gray-50 p-6 rounded-lg shadow">
-                <h3 className="text-xl font-semibold text-gray-800">Loan Details</h3>
-                <p><strong>Loan ID:</strong> {selectedLoan.loanID}</p>
-                <p><strong>Loan Amount:</strong> ${selectedLoan.loanAmount.toLocaleString()}</p>
-                <p><strong>Interest Rate:</strong> {selectedLoan.interestRate}% APR</p>
-                <p><strong>Repayment Terms:</strong> {selectedLoan.termMonths || 12} months</p>
+                <h3 className="text-xl font-semibold text-gray-800">
+                  Loan Details
+                </h3>
+                <p>
+                  <strong>Loan ID:</strong> {selectedLoan.loanID}
+                </p>
+                <p>
+                  <strong>Loan Amount:</strong>{" "}
+                  ${selectedLoan.loanAmount.toLocaleString()}
+                </p>
+                <p>
+                  <strong>Interest Rate:</strong>{" "}
+                  {(selectedLoan.interestRate * 100).toFixed(2)}% APR
+                </p>
+                <p>
+                  <strong>Admin Fee (%):</strong>{" "}
+                  {selectedLoan.adminFee
+                    ? `${(selectedLoan.adminFee * 100).toFixed(2)}%`
+                    : "0%"}
+                </p>
+                <p>
+                  <strong>Repayment Terms:</strong>{" "}
+                  {selectedLoan.termMonths || 12} months
+                </p>
               </div>
             </div>
 
+            {/* Payments Made */}
             <div className="overflow-x-auto">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Payments Made</h3>
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                Payments Made
+              </h3>
               {sortedPayments.length > 0 ? (
                 <table className="min-w-full bg-white border border-gray-300 rounded-lg">
                   <thead className="bg-gray-100">
                     <tr>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Payment Date</th>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Amount</th>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Outstanding Balance</th>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Description</th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                        Payment Date
+                      </th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                        Amount
+                      </th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                        Outstanding Balance
+                      </th>
+                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                        Description
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {sortedPayments.map((payment) => (
                       <tr key={payment._id} className="border-t">
-                        <td className="py-4 px-6 text-sm text-gray-700">{new Date(payment.paymentDate).toLocaleDateString()}</td>
-                        <td className="py-4 px-6 text-sm text-gray-700">${payment.amount.toLocaleString()}</td>
-                        <td className="py-4 px-6 text-sm text-gray-700">${payment.outstandingBalance?.toLocaleString() || 0}</td>
-                        <td className="py-4 px-6 text-sm text-gray-700">{payment.description || "N/A"}</td>
+                        <td className="py-4 px-6 text-sm text-gray-700">
+                          {new Date(payment.paymentDate).toLocaleDateString()}
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-700">
+                          ${payment.amount.toLocaleString()}
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-700">
+                          $
+                          {payment.outstandingBalance
+                            ? payment.outstandingBalance.toLocaleString()
+                            : 0}
+                        </td>
+                        <td className="py-4 px-6 text-sm text-gray-700">
+                          {payment.description || "N/A"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <p className="text-gray-600">No payments recorded for this loan.</p>
+                <p className="text-gray-600">
+                  No payments recorded for this loan.
+                </p>
               )}
             </div>
 
+            {/* Projected Payment Schedule (Simple Interest) with Admin Fee Column */}
             <div className="overflow-x-auto mt-6">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Projected Payment Schedule</h3>
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                Projected Payment Schedule (Simple Interest)
+              </h3>
               <table className="min-w-full bg-white border border-gray-300 rounded-lg">
                 <thead className="bg-gray-100">
                   <tr>
-                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Term</th>
-                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Payment Date</th>
-                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Payment Amount</th>
-                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Principal</th>
-                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Interest</th>
-                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">Ending Balance</th>
+                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                      Term
+                    </th>
+                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                      Payment Date
+                    </th>
+                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                      Principal
+                    </th>
+                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                      Interest
+                    </th>
+                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                      Admin Fee
+                    </th>
+                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                      Payment Amount
+                    </th>
+                    <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                      Remaining Balance
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {projectedPayments.map((payment) => (
                     <tr key={payment.term} className="border-t">
-                      <td className="py-4 px-6 text-sm text-gray-700">{payment.term}</td>
                       <td className="py-4 px-6 text-sm text-gray-700">
-                        {payment.paymentDate ? payment.paymentDate.toLocaleDateString() : "N/A"}
+                        {payment.term}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-700">
-                        ${payment.paymentAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {payment.paymentDate.toLocaleDateString()}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-700">
-                        ${payment.principal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        $
+                        {payment.principal.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-700">
-                        ${payment.interest.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        $
+                        {payment.interest.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
                       </td>
                       <td className="py-4 px-6 text-sm text-gray-700">
-                        ${payment.remainingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        $
+                        {payment.adminFee.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-700">
+                        $
+                        {payment.paymentAmount.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-700">
+                        $
+                        {payment.remainingBalance.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
                       </td>
                     </tr>
                   ))}
-                  {/* Totals */}
-                  <tr className="bg-gray-200 font-semibold">
-                    <td className="py-4 px-6 text-sm text-gray-700">Totals</td>
-                    <td className="py-4 px-6 text-sm text-gray-700">-</td>
-                    <td className="py-4 px-6 text-sm text-gray-700">
-                      ${totalProjectedPayment.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-4 px-6 text-sm text-gray-700">
-                      ${totalProjectedPrincipal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-4 px-6 text-sm text-gray-700">
-                      ${totalProjectedInterest.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-4 px-6 text-sm text-gray-700">-</td>
-                  </tr>
+                  {/* Totals Row */}
+                  {projectedPayments.length > 0 && (
+                    <tr className="bg-gray-200 font-semibold">
+                      <td className="py-4 px-6 text-sm text-gray-700">
+                        Totals
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-700">-</td>
+                      <td className="py-4 px-6 text-sm text-gray-700">
+                        $
+                        {totalPrincipal.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-700">
+                        $
+                        {totalInterest.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-700">
+                        $
+                        {totalAdminFee.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-700">
+                        $
+                        {totalPayment.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td className="py-4 px-6 text-sm text-gray-700">-</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
