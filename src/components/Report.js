@@ -2,20 +2,83 @@
 
 import React, { useEffect, useState } from "react";
 
+/**
+ * Report - A page that shows:
+ * 1) Client & Loan selectors
+ * 2) Payments made (fetched from the server using loanID)
+ * 3) Projected Payment Schedule (simple interest) with an Admin Fee column
+ */
 const Report = ({
   selectedClient,
   selectedLoan,
-  payments = [],
-  clients = [],
-  loans = [],
   setSelectedClient,
   setSelectedLoan,
+  clients = [],
+  loans = [],
 }) => {
-  const [sortedPayments, setSortedPayments] = useState([]);
+  const [payments, setPayments] = useState([]); // We'll store fetched payments here
   const [sortConfig, setSortConfig] = useState({
     key: "paymentDate",
     direction: "descending",
   });
+
+  /**
+   * Whenever a new loan is selected, fetch all the latest payments for that loan.
+   * Example GET endpoint: /api/payments?loanID={selectedLoan.loanID}
+   */
+  useEffect(() => {
+    const fetchPaymentsForLoan = async () => {
+      if (!selectedLoan?.loanID) {
+        setPayments([]);
+        return;
+      }
+      try {
+        const response = await fetch(
+          `http://13.246.7.5:5000/api/payments?loanID=${selectedLoan.loanID}`
+        );
+        const data = await response.json();
+        if (data.success) {
+          setPayments(data.data); // store the newly fetched payments
+        } else {
+          console.error("Failed to fetch payments for this loan.");
+          setPayments([]);
+        }
+      } catch (error) {
+        console.error("Error fetching payments:", error);
+        setPayments([]);
+      }
+    };
+
+    fetchPaymentsForLoan();
+  }, [selectedLoan]);
+
+  /**
+   * Sort the payments based on sortConfig
+   */
+  const sortedPayments = React.useMemo(() => {
+    if (!payments?.length) return [];
+    const { key, direction } = sortConfig;
+    // Create a copy of payments
+    const paymentsCopy = [...payments];
+    return paymentsCopy.sort((a, b) => {
+      if (a[key] < b[key]) return direction === "ascending" ? -1 : 1;
+      if (a[key] > b[key]) return direction === "ascending" ? 1 : -1;
+      return 0;
+    });
+  }, [payments, sortConfig]);
+
+  /**
+   * Sorting helper
+   */
+  const requestSort = (key) => {
+    setSortConfig((prevConfig) => ({
+      key,
+      direction:
+        prevConfig.key === key && prevConfig.direction === "ascending"
+          ? "descending"
+          : "ascending",
+    }));
+  };
 
   /**
    * Calculate Projected Payments using Simple Interest:
@@ -30,13 +93,13 @@ const Report = ({
     if (!selectedLoan) return [];
 
     const {
-      interestRate,  // e.g. 0.05 => 5%
+      interestRate, // e.g. 0.05 => 5%
       loanAmount,
       termMonths = 12,
-      adminFee: adminFeePercentage, // e.g. 0.05 => 5%
+      adminFee: adminFeePercentage = 0, // e.g. 0.05 => 5%
     } = selectedLoan;
 
-    if (termMonths <= 0) return [];
+    if (termMonths <= 0 || !loanAmount || !interestRate) return [];
 
     // Simple interest calculations
     const totalInterest = loanAmount * interestRate * (termMonths / 12);
@@ -45,7 +108,7 @@ const Report = ({
     const monthlyPayment = monthlyPrincipal + monthlyInterest;
 
     // Admin fee as a one-time fee on the first term
-    const oneTimeAdminFee = loanAmount * (adminFeePercentage || 0);
+    const oneTimeAdminFee = loanAmount * adminFeePercentage;
 
     let balance = loanAmount;
     const projectedPayments = [];
@@ -91,54 +154,6 @@ const Report = ({
 
   const projectedPayments = calculateProjectedPayments();
 
-  /**
-   * Sort payments made (already-logged payments) according to the sort config.
-   */
-  useEffect(() => {
-    if (!sortConfig) return;
-    const { key, direction } = sortConfig;
-    setSortedPayments(
-      [...payments].sort((a, b) => {
-        if (a[key] < b[key]) return direction === "ascending" ? -1 : 1;
-        if (a[key] > b[key]) return direction === "ascending" ? 1 : -1;
-        return 0;
-      })
-    );
-  }, [payments, sortConfig]);
-
-  /**
-   * Print functionality
-   */
-  const handlePrint = () => {
-    const printContent = document.getElementById("printable-report");
-    const originalContent = document.body.innerHTML;
-
-    document.body.innerHTML = printContent.innerHTML;
-    window.print();
-    document.body.innerHTML = originalContent;
-    window.location.reload();
-  };
-
-  /**
-   * Sorting helper
-   */
-  const requestSort = (key) => {
-    setSortConfig((prevConfig) => ({
-      key,
-      direction:
-        prevConfig.key === key && prevConfig.direction === "ascending"
-          ? "descending"
-          : "ascending",
-    }));
-  };
-
-  /**
-   * Filter loans for the currently selected client
-   */
-  const filteredLoans = loans.filter(
-    (loan) => loan.clientID === selectedClient?._id
-  );
-
   // Summations for the Totals row in the Projected Payment Schedule
   const totalPayment = projectedPayments.reduce(
     (sum, p) => sum + p.paymentAmount,
@@ -157,9 +172,32 @@ const Report = ({
     0
   );
 
+  /**
+   * Print functionality
+   */
+  const handlePrint = () => {
+    const printContent = document.getElementById("printable-report");
+    const originalContent = document.body.innerHTML;
+
+    document.body.innerHTML = printContent.innerHTML;
+    window.print();
+    document.body.innerHTML = originalContent;
+    window.location.reload();
+  };
+
+  /**
+   * Filter loans for the currently selected client
+   */
+  const filteredLoans = loans.filter(
+    (loan) => loan.clientID === selectedClient?._id
+  );
+
   return (
     <div className="p-8 bg-gray-100 min-h-screen">
-      <div id="printable-report" className="bg-white p-8 rounded-lg shadow-lg space-y-8">
+      <div
+        id="printable-report"
+        className="bg-white p-8 rounded-lg shadow-lg space-y-8"
+      >
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold text-gray-800">
             Comprehensive Loan Report
@@ -194,6 +232,7 @@ const Report = ({
                 const client = clients.find((c) => c._id === e.target.value);
                 setSelectedClient(client);
                 setSelectedLoan(null);
+                setPayments([]); // reset payments if client changes
               }}
             >
               <option value="">-- Select a Client --</option>
@@ -284,7 +323,7 @@ const Report = ({
               </div>
             </div>
 
-            {/* Payments Made */}
+            {/* Payments Made - using the newest fetched data */}
             <div className="overflow-x-auto">
               <h3 className="text-xl font-semibold text-gray-800 mb-4">
                 Payments Made
@@ -293,13 +332,22 @@ const Report = ({
                 <table className="min-w-full bg-white border border-gray-300 rounded-lg">
                   <thead className="bg-gray-100">
                     <tr>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                      <th
+                        onClick={() => requestSort("paymentDate")}
+                        className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase cursor-pointer"
+                      >
                         Payment Date
                       </th>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                      <th
+                        onClick={() => requestSort("amount")}
+                        className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase cursor-pointer"
+                      >
                         Amount
                       </th>
-                      <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
+                      <th
+                        onClick={() => requestSort("outstandingBalance")}
+                        className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase cursor-pointer"
+                      >
                         Outstanding Balance
                       </th>
                       <th className="py-3 px-6 text-left text-xs font-medium text-gray-700 uppercase">
